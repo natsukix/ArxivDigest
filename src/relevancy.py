@@ -47,12 +47,18 @@ def post_process_chat_gpt_response(paper_data, response, threshold_score=8):
     content = re.sub(r'```\s*', '', content)
     
     json_items = content.replace("\n\n", "\n").split("\n")
-    pattern = r"^\d+\. |\\"
+    pattern = r"^\d+\.\s*|\\"
     import pprint
     try:
-        score_items = [
-            json.loads(re.sub(pattern, "", line).strip())
-            for line in json_items if line.strip() and "relevancy score" in line.lower()]
+        score_items = []
+        for line in json_items:
+            if line.strip() and "relevancy score" in line.lower():
+                # 番号とドットを削除
+                clean_line = re.sub(pattern, "", line).strip()
+                # まだ番号が残っている場合は再度削除
+                clean_line = re.sub(r'^\d+\.', '', clean_line).strip()
+                if clean_line:
+                    score_items.append(json.loads(clean_line))
     except Exception as e:
         print(f"JSON parse error: {e}")
         pprint.pprint([re.sub(pattern, "", line).strip() for line in json_items if "relevancy score" in line.lower()])
