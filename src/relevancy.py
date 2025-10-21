@@ -165,14 +165,21 @@ def generate_relevance_score(
             top_p=top_p,
         )
         request_start = time.time()
-        response = utils.openai_completion(
-            prompts=prompt,
-            model_name=model_name,
-            batch_size=1,
-            decoding_args=decoding_args,
-            logit_bias={"100257": -100},  # prevent the <|endoftext|> from being generated
-        )
-        print ("response", response['message']['content'])
+        try:
+            response = utils.openai_completion(
+                prompts=prompt,
+                model_name=model_name,
+                batch_size=1,
+                decoding_args=decoding_args,
+                logit_bias={"100257": -100},  # prevent the <|endoftext|> from being generated
+            )
+            print("Response type:", type(response))
+            print("Response keys:", response.keys() if hasattr(response, 'keys') else "No keys")
+            print("response", response['message']['content'])
+        except Exception as e:
+            print(f"Error getting response: {e}")
+            print(f"Response object: {response}")
+            raise
         request_duration = time.time() - request_start
 
         process_start = time.time()

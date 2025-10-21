@@ -104,6 +104,7 @@ def openai_completion(
                     model=model_name,
                     **batch_decoding_args.__dict__,
                     **decoding_kwargs,
+                    request_timeout=120,  # 2分のタイムアウトを追加
                 )
                 if is_chat_model:
                     completion_batch = openai.ChatCompletion.create(
