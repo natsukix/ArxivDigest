@@ -223,7 +223,52 @@ category_map = {
 }
 
 
-def generate_body(topic, categories, interest, threshold):
+def distribute_papers_by_category(papers, categories, max_total=300):
+    """
+    カテゴリ毎に論文を均等配分する
+    
+    Args:
+        papers: 全論文リスト
+        categories: 対象カテゴリリスト
+        max_total: LLMにかける最大論文数
+    
+    Returns:
+        配分後の論文リスト
+    """
+    # カテゴリ毎に論文を分類
+    papers_by_category = {cat: [] for cat in categories}
+    
+    for paper in papers:
+        processed_subjects = process_subject_fields(paper["subjects"])
+        for cat in categories:
+            if cat in processed_subjects:
+                papers_by_category[cat].append(paper)
+                break  # 最初にマッチしたカテゴリに割り当て
+    
+    # 各カテゴリの論文数を表示
+    print(f"\n=== Category Distribution (Before Balancing) ===")
+    for cat, cat_papers in papers_by_category.items():
+        print(f"  {cat}: {len(cat_papers)} papers")
+    
+    # カテゴリ毎の最大数を計算
+    max_per_category = max_total // len(categories)
+    print(f"\n=== Balancing Strategy ===")
+    print(f"Max total papers: {max_total}")
+    print(f"Number of categories: {len(categories)}")
+    print(f"Max papers per category: {max_per_category}")
+    
+    # 各カテゴリから最大数まで抽出
+    balanced_papers = []
+    for cat, cat_papers in papers_by_category.items():
+        selected = cat_papers[:max_per_category]
+        balanced_papers.extend(selected)
+        print(f"  {cat}: selected {len(selected)}/{len(cat_papers)} papers")
+    
+    print(f"\nTotal papers after balancing: {len(balanced_papers)}")
+    return balanced_papers
+
+
+def generate_body(topic, categories, interest, threshold, max_papers=300):
     if topic == "Physics":
         raise RuntimeError("You must choose a physics subtopic.")
     elif topic in physics_topics:
@@ -258,16 +303,35 @@ def generate_body(topic, categories, interest, threshold):
             if bool(set(process_subject_fields(t["subjects"])) & set(categories))
         ]
         print(f"Papers after filtering: {len(papers)}")
+        
+        # カテゴリ毎に均等配分
+        if len(papers) > max_papers:
+            papers = distribute_papers_by_category(papers, categories, max_total=max_papers)
     else:
         papers = get_papers(abbr)
         print(f"Total papers: {len(papers)} (no category filter)")
     if interest:
+        # LLM評価と要約を実行
+        print(f"\n=== LLM Evaluation & Summarization ===")
         relevancy, hallucination = generate_relevance_score(
             papers,
             query={"interest": interest},
             threshold_score=threshold,
             num_paper_in_prompt=16,
         )
+        
+        # デバッグ情報
+        print(f"\n[DEBUG] generate_relevance_score completed")
+        print(f"[DEBUG] relevancy type: {type(relevancy)}")
+        print(f"[DEBUG] relevancy length: {len(relevancy) if relevancy else 0}")
+        print(f"[DEBUG] hallucination: {hallucination}")
+        
+        # 閾値以上の論文に要約を生成
+        print(f"\n{len(relevancy)}件の重要論文（スコア≥{threshold}）の要約を生成します...")
+        from summarizer import generate_summaries_batch
+        relevancy = generate_summaries_batch(relevancy, model_name="gpt-3.5-turbo")
+        print(f"[DEBUG] Summarization completed for {len(relevancy)} papers")
+        
         body = "<br><br>".join(
             [
                 f'Title: <a href="{paper["main_page"]}">{paper["title"]}</a><br>Authors: {paper["authors"]}<br>Score: {paper["Relevancy score"]}<br>Reason: {paper["Reasons for match"]}'
@@ -312,25 +376,22 @@ if __name__ == "__main__":
     to_email = os.environ.get("TO_EMAIL")
     threshold = config["threshold"]
     interest = config["interest"]
+    max_papers = config.get("max_papers", 300)  # デフォルトは300
     discord_webhook = os.environ.get("DISCORD_WEBHOOK_URL")
     
     try:
-        body, papers, hallucination = generate_body(topic, categories, interest, threshold)
+        print(f"\n[DEBUG] Starting generate_body...")
+        body, papers, hallucination = generate_body(topic, categories, interest, threshold, max_papers)
+        print(f"[DEBUG] generate_body completed")
+        print(f"[DEBUG] papers type: {type(papers)}")
+        print(f"[DEBUG] papers length: {len(papers) if papers else 0}")
+        
         with open("digest.html", "w", encoding="utf-8") as f:
             f.write(body)
         print("✓ Generated digest.html")
         
-        # 要約生成とDiscord通知
+        # Discord通知（要約は既に生成済み）
         if discord_webhook and papers:
-            # 重要な論文のみに絞り込み（interest指定時はすでにLLMでフィルタ済み）
-            if interest:
-                print(f"\n{len(papers)}件の重要論文の要約を生成します...")
-                papers_with_summary = generate_summaries_batch(papers, model_name="gpt-3.5-turbo")
-            else:
-                # interestが未設定の場合は要約なしで投稿
-                print(f"\n{len(papers)}件の論文を投稿します（要約なし）...")
-                papers_with_summary = papers
-            
             print("\nPosting to Discord...")
             send_to_discord(
                 webhook_url=discord_webhook,
@@ -338,7 +399,7 @@ if __name__ == "__main__":
                 topic=topic,
                 categories=categories if categories else ["All"],
                 threshold=threshold,
-                papers_with_summary=papers_with_summary if interest else None
+                papers_with_summary=papers if interest else None
             )
         elif discord_webhook:
             print("\nNo papers found. Skipping Discord notification.")
@@ -346,27 +407,34 @@ if __name__ == "__main__":
             print("\nNo Discord webhook URL found. Skipping Discord notification.")
         
         # Email notification
-        if os.environ.get("SENDGRID_API_KEY", None):
-            sg = SendGridAPIClient(api_key=os.environ.get("SENDGRID_API_KEY"))
-            from_email = Email(from_email)  # Change to your verified sender
-            to_email = To(to_email)
-            subject = date.today().strftime("Personalized arXiv Digest, %d %b %Y")
-            content = Content("text/html", body)
-            mail = Mail(from_email, to_email, subject, content)
-            mail_json = mail.get()
+        print(f"\n[DEBUG] Email check - SENDGRID_API_KEY: {bool(os.environ.get('SENDGRID_API_KEY'))}, from_email: {from_email}, to_email: {to_email}")
+        if os.environ.get("SENDGRID_API_KEY") and from_email and to_email:
+            try:
+                sg = SendGridAPIClient(api_key=os.environ.get("SENDGRID_API_KEY"))
+                from_email_obj = Email(from_email)  # Change to your verified sender
+                to_email_obj = To(to_email)
+                subject = date.today().strftime("Personalized arXiv Digest, %d %b %Y")
+                content = Content("text/html", body)
+                mail = Mail(from_email_obj, to_email_obj, subject, content)
+                mail_json = mail.get()
 
-            # Send an HTTP POST request to /mail/send
-            response = sg.client.mail.send.post(request_body=mail_json)
-            if response.status_code >= 200 and response.status_code <= 300:
-                print("Send test email: Success!")
-            else:
-                print("Send test email: Failure ({response.status_code}, {response.text})")
+                # Send an HTTP POST request to /mail/send
+                response = sg.client.mail.send.post(request_body=mail_json)
+                if response.status_code >= 200 and response.status_code <= 300:
+                    print("✓ Send email: Success!")
+                else:
+                    print(f"✗ Send email: Failure ({response.status_code}, {response.text})")
+            except Exception as email_error:
+                print(f"✗ Email sending failed: {email_error}")
         else:
-            print("No SendGrid API key or email address configured. Skipping email.")
+            print("ℹ️ No SendGrid API key or email address configured. Skipping email.")
     
     except Exception as e:
+        import traceback
         error_msg = f"Error occurred: {str(e)}"
         print(error_msg)
+        print("\n[DEBUG] Full traceback:")
+        traceback.print_exc()
         if discord_webhook:
             send_error_to_discord(discord_webhook, error_msg)
         raise

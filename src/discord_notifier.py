@@ -107,68 +107,99 @@ def send_to_discord(webhook_url, papers_html, topic, categories, threshold, pape
         
         print(f"✓ Discordにヘッダーを投稿しました")
         
-        # 要約付き論文がある場合は個別投稿（上限5件）
+        # 要約付き論文がある場合は個別投稿（カテゴリ毎に上位2件）
         if papers_with_summary:
-            max_papers = 5
-            display_papers = papers_with_summary[:max_papers]
-            
             import time
-            for idx, paper in enumerate(display_papers, 1):
-                title = paper.get('title', 'タイトル不明')
-                authors = paper.get('authors', '著者不明')
-                link = paper.get('main_page', '')
-                score = paper.get('Relevancy score', 'N/A')
-                reason = paper.get('Reasons for match', '')
-                summary = paper.get('summary', {})
-                summary_en = summary.get('summary_en', '') if isinstance(summary, dict) else ''
-                summary_ja = summary.get('summary_ja', '') if isinstance(summary, dict) else ''
+            from relevancy import process_subject_fields
+            
+            # カテゴリ毎に論文を分類
+            papers_by_category = {}
+            for paper in papers_with_summary:
+                processed_subjects = process_subject_fields(paper.get('subjects', ''))
+                # 指定カテゴリに該当するものを分類
+                matched_category = None
+                for cat in categories:
+                    if cat in processed_subjects:
+                        matched_category = cat
+                        break
                 
-                # 1論文ごとに1メッセージ
-                paper_content = f"**【論文 {idx}/{min(len(papers_with_summary), max_papers)}】**\n\n"
-                paper_content += f"**📚 {title}**\n\n"
-                paper_content += f"**� 著者:** {authors}\n"
-                paper_content += f"**⭐ 関連性スコア:** {score}/10\n\n"
-                
-                if reason:
-                    paper_content += f"**💡 なぜ重要か:**\n{reason}\n\n"
-                
-                if summary_ja:
-                    paper_content += f"**📄 要約（日本語）:**\n{summary_ja}\n\n"
-                
-                if summary_en:
-                    paper_content += f"**📄 Summary (English):**\n{summary_en}\n\n"
-                
-                paper_content += f"**🔗 リンク:** {link}\n"
-                paper_content += "─" * 40
-                
-                # 2000文字制限チェック
-                if len(paper_content) > 1950:
-                    paper_content = paper_content[:1950] + "\n\n... (要約が長すぎるため省略)"
-                
-                payload = {
-                    "content": paper_content,
+                if matched_category:
+                    if matched_category not in papers_by_category:
+                        papers_by_category[matched_category] = []
+                    papers_by_category[matched_category].append(paper)
+            
+            print(f"\n=== Discord投稿: カテゴリ毎に上位2件 ===")
+            total_posted = 0
+            max_per_category = 2
+            
+            for category, cat_papers in papers_by_category.items():
+                # カテゴリヘッダー
+                category_header = f"\n━━━━━━━━━━━━━━━━━━━━\n**📂 カテゴリ: {category}** ({len(cat_papers)}件中{min(len(cat_papers), max_per_category)}件表示)\n━━━━━━━━━━━━━━━━━━━━"
+                header_payload = {
+                    "content": category_header,
                     "username": "ArxivDigest Bot"
                 }
-                response = requests.post(webhook_url, json=payload)
+                requests.post(webhook_url, json=header_payload)
+                time.sleep(1)
                 
-                if response.status_code not in [200, 204]:
-                    print(f"論文 {idx} の投稿に失敗しました: {response.status_code}")
-                    continue
-                
-                print(f"✓ 論文 {idx}/{min(len(papers_with_summary), max_papers)} を投稿しました")
-                
-                # Rate limit対策
-                if idx < len(display_papers):
+                # 上位2件を投稿
+                display_papers = cat_papers[:max_per_category]
+                for idx, paper in enumerate(display_papers, 1):
+                    title = paper.get('title', 'タイトル不明')
+                    authors = paper.get('authors', '著者不明')
+                    link = paper.get('main_page', '')
+                    score = paper.get('Relevancy score', 'N/A')
+                    reason = paper.get('Reasons for match', '')
+                    summary = paper.get('summary', {})
+                    summary_en = summary.get('summary_en', '') if isinstance(summary, dict) else ''
+                    summary_ja = summary.get('summary_ja', '') if isinstance(summary, dict) else ''
+                    
+                    # 1論文ごとに1メッセージ
+                    paper_content = f"**【論文 {idx}/{min(len(cat_papers), max_per_category)}】**\n\n"
+                    paper_content += f"**📚 {title}**\n\n"
+                    paper_content += f"**👥 著者:** {authors}\n"
+                    paper_content += f"**⭐ 関連性スコア:** {score}/10\n\n"
+                    
+                    if reason:
+                        paper_content += f"**💡 なぜ重要か:**\n{reason}\n\n"
+                    
+                    if summary_ja:
+                        paper_content += f"**📄 要約（日本語）:**\n{summary_ja}\n\n"
+                    
+                    if summary_en:
+                        paper_content += f"**📄 Summary (English):**\n{summary_en}\n\n"
+                    
+                    paper_content += f"**🔗 リンク:** {link}\n"
+                    paper_content += "─" * 40
+                    
+                    # 2000文字制限チェック
+                    if len(paper_content) > 1950:
+                        paper_content = paper_content[:1950] + "\n\n... (要約が長すぎるため省略)"
+                    
+                    payload = {
+                        "content": paper_content,
+                        "username": "ArxivDigest Bot"
+                    }
+                    response = requests.post(webhook_url, json=payload)
+                    
+                    if response.status_code not in [200, 204]:
+                        print(f"論文投稿に失敗しました: {response.status_code}")
+                        continue
+                    
+                    total_posted += 1
+                    print(f"✓ {category}: 論文 {idx}/{min(len(cat_papers), max_per_category)} を投稿")
+                    
+                    # Rate limit対策
                     time.sleep(1.5)
             
-            # フッター投稿
-            if len(papers_with_summary) > max_papers:
-                footer_content = f"\n📊 **その他の論文:** 他に {len(papers_with_summary) - max_papers} 件の重要論文があります（digest.htmlを参照）"
-                footer_payload = {
-                    "content": footer_content,
-                    "username": "ArxivDigest Bot"
-                }
-                requests.post(webhook_url, json=footer_payload)
+            # 総計フッター
+            total_papers = sum(len(papers) for papers in papers_by_category.values())
+            footer_content = f"\n📊 **投稿完了:** 全{total_posted}件の論文を投稿しました（全{total_papers}件中）"
+            footer_payload = {
+                "content": footer_content,
+                "username": "ArxivDigest Bot"
+            }
+            requests.post(webhook_url, json=footer_payload)
         else:
             # 要約なしの場合は従来の簡易形式
             max_papers = 10
