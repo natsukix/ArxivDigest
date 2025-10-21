@@ -26,34 +26,61 @@
 #   3. Do not care about specific application, for example, information extraction, summarization, etc.
 #   4. Not interested in paper focus on specific languages, e.g., Arabic, Chinese, etc.
 
-# ===== ArxivDigest full config (stable version) =====
+# ===== ArxivDigest 完全版 config.yaml =====
 
+# ---- 検索・要約対象 ----
 topic: >
-  RAG/検索拡張、エージェント、ツール利用、効率化（蒸留・量子化・軽量化）、
-  評価（benchmarks）、安全性、実運用に効く手法
+  AIエージェント、RAG（検索拡張生成）、効率化（蒸留・量子化・軽量化）、
+  評価（benchmarks）、安全性、実運用に関する研究
+
+interest: >
+  実運用や性能改善に直接貢献するAI関連論文（特にcs.AI, cs.CL, cs.LG）
 
 categories:
   - cs.AI
   - cs.CL
   - cs.LG
 
-language: ja
-pick_top_n: 5
-max_items_from_rss: 60
-max_summary_chars: 700
-threshold: 0.3       # ← これが今回の必須キー！
+# ---- スコアリング・選別 ----
+threshold: 0.3              # relevanceスコア閾値（0〜1）
+pick_top_n: 5               # 最終的に選ぶ上位論文数
+max_items_from_rss: 60      # RSSから最初に取る件数
 
+# ---- 出力設定 ----
+language: ja
+max_summary_chars: 700
+output_dir: out             # 出力ディレクトリ
+
+# ---- OpenAI設定 ----
 openai:
   model: gpt-5
+  temperature: 0.7
+  max_tokens: 2000
 
+# ---- メール送信設定 ----
 email:
   enabled: false
   from: ""
   to: ""
+  subject: "Daily AI Research Digest"
 
+# ---- ファイル出力設定 ----
 output:
   markdown:
     enabled: true
     path: out/daily.md
+  json:
+    enabled: false
+    path: out/daily.json
 
+# ---- ログ・実行 ----
+logging:
+  level: INFO
+  save_log: true
+  log_file: logs/run.log
 
+# ---- RSSフィード ----
+rss_urls:
+  - https://arxiv.org/rss/cs.AI
+  - https://arxiv.org/rss/cs.CL
+  - https://arxiv.org/rss/cs.LG
