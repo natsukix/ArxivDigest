@@ -39,15 +39,23 @@ def post_process_chat_gpt_response(paper_data, response, threshold_score=8):
     selected_data = []
     if response is None:
         return []
-    json_items = response['message']['content'].replace("\n\n", "\n").split("\n")
+    
+    content = response['message']['content']
+    
+    # ```json ... ``` マークダウン形式を削除
+    content = re.sub(r'```json\s*', '', content)
+    content = re.sub(r'```\s*', '', content)
+    
+    json_items = content.replace("\n\n", "\n").split("\n")
     pattern = r"^\d+\. |\\"
     import pprint
     try:
         score_items = [
-            json.loads(re.sub(pattern, "", line))
-            for line in json_items if "relevancy score" in line.lower()]
-    except Exception:
-        pprint.pprint([re.sub(pattern, "", line) for line in json_items if "relevancy score" in line.lower()])
+            json.loads(re.sub(pattern, "", line).strip())
+            for line in json_items if line.strip() and "relevancy score" in line.lower()]
+    except Exception as e:
+        print(f"JSON parse error: {e}")
+        pprint.pprint([re.sub(pattern, "", line).strip() for line in json_items if "relevancy score" in line.lower()])
         raise RuntimeError("failed")
     pprint.pprint(score_items)
     scores = []
