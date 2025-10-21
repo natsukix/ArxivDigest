@@ -26,22 +26,38 @@
 #   3. Do not care about specific application, for example, information extraction, summarization, etc.
 #   4. Not interested in paper focus on specific languages, e.g., Arabic, Chinese, etc.
 
-run:
-  categories: ["cs.AI", "cs.CL", "cs.LG"]   # 取得するarXivカテゴリ
-  max_items_from_rss: 60                    # RSSから一旦取る件数（多めに取って後で絞る）
-  pick_top_n: 5                             # 最終的に選ぶ件数（毎日5件）
-  language: "ja"                            # 要約の言語
-  interests: |                              # あなたの興味（フィルタのヒント）
-    RAG/検索拡張、ツール利用、エージェント、効率化（蒸留・量子化・軽量化）、
-    評価（benchmarks）、安全性、実運用に効く手法。
+# ===== ArxivDigest minimal config =====
 
+# あなたの興味（選定のヒントになる自由記述）
+topic: >
+  RAG/検索拡張、エージェント、ツール利用、効率化（蒸留・量子化・軽量化）、
+  評価（benchmarks）、安全性、実運用に効く手法
+
+# 取得する arXiv カテゴリ
+categories:
+  - cs.AI
+  - cs.CL
+  - cs.LG
+
+# 要約・出力設定
+language: ja            # 要約の言語
+pick_top_n: 5           # 最終的に選ぶ本数
+max_items_from_rss: 60  # RSSから最初に取る件数（多めに取って後で絞る）
+max_summary_chars: 700  # 3分で読める目安（日本語で400〜600字くらい）
+
+# OpenAI
 openai:
-  model: "gpt-5"                            # 使いたいモデル名
-  max_summary_chars: 700                    # 3分で読める目安（日本語で約400〜600字）
+  model: gpt-5          # 使用モデル（あなたのキーで使えるものに合わせて）
 
+# メール出力（まずは無効でOK。SendGridを後で設定）
+email:
+  enabled: false
+  from: ""
+  to:   ""
+
+# ファイル出力（ActionsのArtifactsで確認できる）
 output:
-  email:
-    enabled: false                          # まずはメールを使わない場合
   markdown:
     enabled: true
-    path: "out/daily.md"                    # 生成ファイル（ActionsのArtifactsで確認可）
+    path: out/daily.md
+
