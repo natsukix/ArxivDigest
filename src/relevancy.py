@@ -84,7 +84,7 @@ def find_word_in_string(w, s):
 
 def process_subject_fields(subjects):
     all_subjects = subjects.split(";")
-    all_subjects = [s.split(" (")[0] for s in all_subjects]
+    all_subjects = [s.split(" (")[0].strip() for s in all_subjects]
     return all_subjects
 
 def generate_relevance_score(

@@ -324,12 +324,11 @@ if __name__ == "__main__":
             print("\nPosting to Discord...")
             send_to_discord(
                 webhook_url=discord_webhook,
-                papers_list=papers,
+                papers_html=body,
                 topic=topic,
                 categories=categories if categories else ["All"],
-                has_interest=bool(interest)
+                threshold=threshold
             )
-            print(f"🎉 Discord posting complete! Posted {len(papers) if papers else 0} papers")
         else:
             print("\nNo Discord webhook URL found. Skipping Discord notification.")
         
