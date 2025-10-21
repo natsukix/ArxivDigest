@@ -26,16 +26,13 @@
 #   3. Do not care about specific application, for example, information extraction, summarization, etc.
 #   4. Not interested in paper focus on specific languages, e.g., Arabic, Chinese, etc.
 
-topic: AI
-interest: >
-  RAGやエージェント、効率化（蒸留・量子化）、評価、安全性、実運用に効く手法
-categories: [cs.AI, cs.CL, cs.LG]
-threshold: 0.3
-pick_top_n: 5
-max_items_from_rss: 60
-language: ja
-max_summary_chars: 700
-openai: { model: gpt-5 }
-output:
-  markdown: { enabled: true, path: out/daily.md }
-email: { enabled: false, from: "", to: "" }
+Subject: Computer Science
+Topic: Artificial Intelligence
+Categories:
+  - cs.AI
+  - cs.CL
+  - cs.LG
+Interest: >
+  I am interested in papers that present new architectures,
+  training methods, or evaluations of AI models applicable to
+  real-world use cases.
