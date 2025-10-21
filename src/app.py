@@ -60,10 +60,10 @@ categories_map = {
 
 def sample(email, topic, physics_topic, categories, interest):
     if not topic:
-        raise gr.Error("You must choose a topic.")
+        raise gr.Error("トピックを選択してください。")
     if topic == "Physics":
         if isinstance(physics_topic, list):
-            raise gr.Error("You must choose a physics topic.")
+            raise gr.Error("物理学のトピックを選択してください。")
         topic = physics_topic
         abbr = physics_topics[topic]
     else:
@@ -76,7 +76,7 @@ def sample(email, topic, physics_topic, categories, interest):
     else:
         papers = get_papers(abbr, limit=4)
     if interest:
-        if not openai.api_key: raise gr.Error("Set your OpenAI api key on the left first")
+        if not openai.api_key: raise gr.Error("まず左側でOpenAI APIキーを設定してください")
         relevancy, _ = generate_relevance_score(
             papers,
             query={"interest": interest},
@@ -84,7 +84,7 @@ def sample(email, topic, physics_topic, categories, interest):
             num_paper_in_prompt=4)
         return "\n\n".join([paper["summarized_text"] for paper in relevancy])
     else:
-        return "\n\n".join(f"Title: {paper['title']}\nAuthors: {paper['authors']}" for paper in papers)
+        return "\n\n".join(f"タイトル: {paper['title']}\n著者: {paper['authors']}" for paper in papers)
 
 
 def change_subsubject(subject, physics_subject):
@@ -105,11 +105,11 @@ def change_physics(subject):
 
 
 def test(email, topic, physics_topic, categories, interest, key):
-    if not email: raise gr.Error("Set your email")
-    if not key: raise gr.Error("Set your SendGrid key")
+    if not email: raise gr.Error("メールアドレスを設定してください")
+    if not key: raise gr.Error("SendGridキーを設定してください")
     if topic == "Physics":
         if isinstance(physics_topic, list):
-            raise gr.Error("You must choose a physics topic.")
+            raise gr.Error("物理学のトピックを選択してください。")
         topic = physics_topic
         abbr = physics_topics[topic]
     else:
@@ -122,21 +122,21 @@ def test(email, topic, physics_topic, categories, interest, key):
     else:
         papers = get_papers(abbr, limit=4)
     if interest:
-        if not openai.api_key: raise gr.Error("Set your OpenAI api key on the left first")
+        if not openai.api_key: raise gr.Error("まず左側でOpenAI APIキーを設定してください")
         relevancy, hallucination = generate_relevance_score(
             papers,
             query={"interest": interest},
             threshold_score=7,
             num_paper_in_prompt=8)
-        body = "<br><br>".join([f'Title: <a href="{paper["main_page"]}">{paper["title"]}</a><br>Authors: {paper["authors"]}<br>Score: {paper["Relevancy score"]}<br>Reason: {paper["Reasons for match"]}' for paper in relevancy])
+        body = "<br><br>".join([f'タイトル: <a href="{paper["main_page"]}">{paper["title"]}</a><br>著者: {paper["authors"]}<br>スコア: {paper["Relevancy score"]}<br>理由: {paper["Reasons for match"]}' for paper in relevancy])
         if hallucination:
-            body = "Warning: the model hallucinated some papers. We have tried to remove them, but the scores may not be accurate.<br><br>" + body
+            body = "警告: モデルが存在しない論文を生成した可能性があります。削除を試みましたが、スコアが正確でない可能性があります。<br><br>" + body
     else:
-        body = "<br><br>".join([f'Title: <a href="{paper["main_page"]}">{paper["title"]}</a><br>Authors: {paper["authors"]}' for paper in papers])
+        body = "<br><br>".join([f'タイトル: <a href="{paper["main_page"]}">{paper["title"]}</a><br>著者: {paper["authors"]}' for paper in papers])
     sg = sendgrid.SendGridAPIClient(api_key=key)
     from_email = Email(email)
     to_email = To(email)
-    subject = "arXiv digest"
+    subject = "arXivダイジェスト"
     content = Content("text/html", body)
     mail = Mail(from_email, to_email, subject, content)
     mail_json = mail.get()
@@ -144,9 +144,9 @@ def test(email, topic, physics_topic, categories, interest, key):
     # Send an HTTP POST request to /mail/send
     response = sg.client.mail.send.post(request_body=mail_json)
     if response.status_code >= 200 and response.status_code <= 300:
-        return "Success!"
+        return "成功!"
     else:
-        return "Failure: ({response.status_code})"
+        return f"失敗: ({response.status_code})"
 
 
 def register_openai_token(token):
@@ -155,35 +155,35 @@ def register_openai_token(token):
 with gr.Blocks() as demo:
     with gr.Row():
         with gr.Column(scale=1):
-            token = gr.Textbox(label="OpenAI API Key", type="password")
+            token = gr.Textbox(label="OpenAI APIキー", type="password")
             subject = gr.Radio(
-                list(topics.keys()), label="Topic"
+                list(topics.keys()), label="トピック"
             )
-            physics_subject = gr.Dropdown(physics_topics, value=[], multiselect=False, label="Physics category", visible=False, info="")
+            physics_subject = gr.Dropdown(physics_topics, value=[], multiselect=False, label="物理学カテゴリ", visible=False, info="")
             subsubject = gr.Dropdown(
-                    [], value=[], multiselect=True, label="Subtopic", info="Optional. Leaving it empty will use all subtopics.", visible=False)
+                    [], value=[], multiselect=True, label="サブトピック", info="オプション。空欄の場合はすべてのサブトピックを使用します。", visible=False)
             subject.change(fn=change_physics, inputs=[subject], outputs=physics_subject)
             subject.change(fn=change_subsubject, inputs=[subject, physics_subject], outputs=subsubject)
             physics_subject.change(fn=change_subsubject, inputs=[subject, physics_subject], outputs=subsubject)
 
-            interest = gr.Textbox(label="A natural language description of what you are interested in. We will generate relevancy scores (1-10) and explanations for the papers in the selected topics according to this statement.", info="Press shift-enter or click the button below to update.", lines=7)
-            sample_btn = gr.Button("Generate Digest")
-            sample_output = gr.Textbox(label="Results for your configuration.", info="For runtime purposes, this is only done on a small subset of recent papers in the topic you have selected. Papers will not be filtered by relevancy, only sorted on a scale of 1-10.")
+            interest = gr.Textbox(label="あなたの研究関心を自然言語で記述してください。この記述に基づいて選択したトピックの論文に関連性スコア（1-10）と説明を生成します。", info="Shift+Enterキーを押すか、下のボタンをクリックして更新してください。", lines=7)
+            sample_btn = gr.Button("ダイジェストを生成")
+            sample_output = gr.Textbox(label="設定に基づく結果。", info="実行時間の都合上、選択したトピックの最近の論文の一部のみで実行されます。論文は関連性でフィルタリングされず、1-10のスケールでソートされるだけです。")
         with gr.Column(scale=0.40):
             with gr.Box():
                 title = gr.Markdown(
                     """
-                    # Email Setup, Optional
-                    Send an email to the below address using the configuration on the right. Requires a sendgrid token. These values are not needed to use the right side of this page.
+                    # メール設定（オプション）
+                    右側の設定を使用して、以下のアドレスにメールを送信します。SendGridトークンが必要です。このページの右側を使用するだけであれば、これらの値は不要です。
 
-                    To create a scheduled job for this, see our [Github Repository](https://github.com/AutoLLM/ArxivDigest)
+                    スケジュールジョブを作成するには、[GitHubリポジトリ](https://github.com/AutoLLM/ArxivDigest)を参照してください。
                     """,
                     interactive=False, show_label=False)
-                email = gr.Textbox(label="Email address", type="email", placeholder="")
-                sendgrid_token = gr.Textbox(label="SendGrid API Key", type="password")
+                email = gr.Textbox(label="メールアドレス", type="email", placeholder="")
+                sendgrid_token = gr.Textbox(label="SendGrid APIキー", type="password")
                 with gr.Row():
-                    test_btn = gr.Button("Send email")
-                    output = gr.Textbox(show_label=False, placeholder="email status")
+                    test_btn = gr.Button("メール送信")
+                    output = gr.Textbox(show_label=False, placeholder="メール送信状況")
     test_btn.click(fn=test, inputs=[email, subject, physics_subject, subsubject, interest, sendgrid_token], outputs=output)
     token.change(fn=register_openai_token, inputs=[token])
     sample_btn.click(fn=sample, inputs=[email, subject, physics_subject, subsubject, interest], outputs=sample_output)
