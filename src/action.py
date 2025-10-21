@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 import openai
 from relevancy import generate_relevance_score, process_subject_fields
 from download_new_papers import get_papers
+from discord_notifier import send_to_discord, send_error_to_discord
 
 
 # Hackathon quality code. Don't judge too harshly.
@@ -291,23 +292,44 @@ if __name__ == "__main__":
     to_email = os.environ.get("TO_EMAIL")
     threshold = config["threshold"]
     interest = config["interest"]
-    body = generate_body(topic, categories, interest, threshold)
-    with open("digest.html", "w") as f:
-        f.write(body)
-    if os.environ.get("SENDGRID_API_KEY", None):
-        sg = SendGridAPIClient(api_key=os.environ.get("SENDGRID_API_KEY"))
-        from_email = Email(from_email)  # Change to your verified sender
-        to_email = To(to_email)
-        subject = date.today().strftime("パーソナライズされたarXivダイジェスト - %Y年%m月%d日")
-        content = Content("text/html", body)
-        mail = Mail(from_email, to_email, subject, content)
-        mail_json = mail.get()
-
-        # Send an HTTP POST request to /mail/send
-        response = sg.client.mail.send.post(request_body=mail_json)
-        if response.status_code >= 200 and response.status_code <= 300:
-            print("メール送信: 成功!")
+    discord_webhook = os.environ.get("DISCORD_WEBHOOK_URL")
+    
+    try:
+        body = generate_body(topic, categories, interest, threshold)
+        with open("digest.html", "w", encoding="utf-8") as f:
+            f.write(body)
+        print("✓ digest.htmlを生成しました")
+        
+        # Discord投稿
+        if discord_webhook:
+            print("\nDiscordに投稿しています...")
+            send_to_discord(discord_webhook, body, topic, categories, threshold)
         else:
-            print(f"メール送信: 失敗 ({response.status_code}, {response.text})")
-    else:
-        print("SendGrid APIキーが見つかりません。メール送信をスキップします")
+            print("Discord Webhook URLが設定されていません。Discord投稿をスキップします。")
+        
+        # メール送信（オプション）
+        if os.environ.get("SENDGRID_API_KEY", None) and from_email and to_email:
+            sg = SendGridAPIClient(api_key=os.environ.get("SENDGRID_API_KEY"))
+            from_email = Email(from_email)
+            to_email = To(to_email)
+            subject = date.today().strftime("パーソナライズされたarXivダイジェスト - %Y年%m月%d日")
+            content = Content("text/html", body)
+            mail = Mail(from_email, to_email, subject, content)
+            mail_json = mail.get()
+
+            # Send an HTTP POST request to /mail/send
+            response = sg.client.mail.send.post(request_body=mail_json)
+            if response.status_code >= 200 and response.status_code <= 300:
+                print("✓ メール送信: 成功!")
+            else:
+                print(f"✗ メール送信: 失敗 ({response.status_code}, {response.text})")
+        else:
+            print("SendGrid APIキーまたはメールアドレスが設定されていません。メール送信をスキップします。")
+    
+    except Exception as e:
+        error_msg = f"エラーが発生しました: {str(e)}"
+        print(f"✗ {error_msg}")
+        if discord_webhook:
+            send_error_to_discord(discord_webhook, error_msg)
+        raise
+        raise
