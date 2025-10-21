@@ -31,7 +31,10 @@ def encode_prompt(query, prompt_papers):
         prompt += f"{idx + 1}. Authors: {authors}\n"
         prompt += f"{idx + 1}. Abstract: {abstract}\n"
     prompt += f"\n Generate response:\n1."
-    print(prompt)
+    try:
+        print(prompt)
+    except UnicodeEncodeError:
+        print(f"Prompt length: {len(prompt)} characters (printing skipped due to encoding issue)")
     return prompt
 
 
