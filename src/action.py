@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 import openai
 from relevancy import generate_relevance_score, process_subject_fields
 from download_new_papers import get_papers
+from discord_notifier import send_to_discord, send_error_to_discord
 
 
 # Hackathon quality code. Don't judge too harshly.
@@ -235,13 +236,30 @@ def generate_body(topic, categories, interest, threshold):
             if category not in category_map[topic]:
                 raise RuntimeError(f"{category} is not a category of {topic}")
         papers = get_papers(abbr)
+        print(f"\n=== Paper Acquisition Results ===")
+        print(f"Total papers: {len(papers)}")
+        
+        # Log category information for first 5 papers
+        print(f"\nCategory info for first 5 papers:")
+        for i, paper in enumerate(papers[:5]):
+            print(f"\nPaper {i+1}:")
+            print(f"  Title: {paper['title'][:80]}...")
+            print(f"  Raw subjects: {paper['subjects']}")
+            processed = process_subject_fields(paper['subjects'])
+            print(f"  Processed: {processed}")
+            matches = set(processed) & set(categories)
+            print(f"  Matches: {matches if matches else 'None'}")
+        
+        print(f"\nFilter criteria: {categories}")
         papers = [
             t
             for t in papers
             if bool(set(process_subject_fields(t["subjects"])) & set(categories))
         ]
+        print(f"Papers after filtering: {len(papers)}")
     else:
         papers = get_papers(abbr)
+        print(f"Total papers: {len(papers)} (no category filter)")
     if interest:
         relevancy, hallucination = generate_relevance_score(
             papers,
@@ -267,7 +285,9 @@ def generate_body(topic, categories, interest, threshold):
                 for paper in papers
             ]
         )
-    return body
+        relevancy = None
+        hallucination = False
+    return body, papers if not interest else relevancy, hallucination
 
 
 if __name__ == "__main__":
@@ -291,23 +311,50 @@ if __name__ == "__main__":
     to_email = os.environ.get("TO_EMAIL")
     threshold = config["threshold"]
     interest = config["interest"]
-    body = generate_body(topic, categories, interest, threshold)
-    with open("digest.html", "w") as f:
-        f.write(body)
-    if os.environ.get("SENDGRID_API_KEY", None):
-        sg = SendGridAPIClient(api_key=os.environ.get("SENDGRID_API_KEY"))
-        from_email = Email(from_email)  # Change to your verified sender
-        to_email = To(to_email)
-        subject = date.today().strftime("Personalized arXiv Digest, %d %b %Y")
-        content = Content("text/html", body)
-        mail = Mail(from_email, to_email, subject, content)
-        mail_json = mail.get()
-
-        # Send an HTTP POST request to /mail/send
-        response = sg.client.mail.send.post(request_body=mail_json)
-        if response.status_code >= 200 and response.status_code <= 300:
-            print("Send test email: Success!")
+    discord_webhook = os.environ.get("DISCORD_WEBHOOK_URL")
+    
+    try:
+        body, papers, hallucination = generate_body(topic, categories, interest, threshold)
+        with open("digest.html", "w", encoding="utf-8") as f:
+            f.write(body)
+        print("✓ Generated digest.html")
+        
+        # Discord notification
+        if discord_webhook:
+            print("\nPosting to Discord...")
+            send_to_discord(
+                webhook_url=discord_webhook,
+                papers_list=papers,
+                topic=topic,
+                categories=categories if categories else ["All"],
+                has_interest=bool(interest)
+            )
+            print(f"🎉 Discord posting complete! Posted {len(papers) if papers else 0} papers")
         else:
-            print("Send test email: Failure ({response.status_code}, {response.text})")
-    else:
-        print("No sendgrid api key found. Skipping email")
+            print("\nNo Discord webhook URL found. Skipping Discord notification.")
+        
+        # Email notification
+        if os.environ.get("SENDGRID_API_KEY", None):
+            sg = SendGridAPIClient(api_key=os.environ.get("SENDGRID_API_KEY"))
+            from_email = Email(from_email)  # Change to your verified sender
+            to_email = To(to_email)
+            subject = date.today().strftime("Personalized arXiv Digest, %d %b %Y")
+            content = Content("text/html", body)
+            mail = Mail(from_email, to_email, subject, content)
+            mail_json = mail.get()
+
+            # Send an HTTP POST request to /mail/send
+            response = sg.client.mail.send.post(request_body=mail_json)
+            if response.status_code >= 200 and response.status_code <= 300:
+                print("Send test email: Success!")
+            else:
+                print("Send test email: Failure ({response.status_code}, {response.text})")
+        else:
+            print("No SendGrid API key or email address configured. Skipping email.")
+    
+    except Exception as e:
+        error_msg = f"Error occurred: {str(e)}"
+        print(error_msg)
+        if discord_webhook:
+            send_error_to_discord(discord_webhook, error_msg)
+        raise
