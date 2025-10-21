@@ -236,13 +236,30 @@ def generate_body(topic, categories, interest, threshold):
             if category not in category_map[topic]:
                 raise RuntimeError(f"{category}は{topic}のカテゴリではありません")
         papers = get_papers(abbr)
+        print(f"\n=== 論文取得結果 ===")
+        print(f"総論文数: {len(papers)}")
+        
+        # 最初の5件のカテゴリをログ出力
+        print(f"\n最初の5件のカテゴリ情報:")
+        for i, paper in enumerate(papers[:5]):
+            print(f"\n論文 {i+1}:")
+            print(f"  タイトル: {paper['title'][:80]}...")
+            print(f"  生のsubjects: {paper['subjects']}")
+            processed = process_subject_fields(paper['subjects'])
+            print(f"  処理後: {processed}")
+            matches = set(processed) & set(categories)
+            print(f"  マッチ: {matches if matches else 'なし'}")
+        
+        print(f"\nフィルタ条件: {categories}")
         papers = [
             t
             for t in papers
             if bool(set(process_subject_fields(t["subjects"])) & set(categories))
         ]
+        print(f"フィルタ後の論文数: {len(papers)}")
     else:
         papers = get_papers(abbr)
+        print(f"総論文数: {len(papers)} (カテゴリフィルタなし)")
     if interest:
         relevancy, hallucination = generate_relevance_score(
             papers,
