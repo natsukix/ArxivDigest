@@ -106,35 +106,44 @@ def send_to_discord(webhook_url, papers_html, topic, categories, threshold):
         
         print(f"✓ Discordにヘッダーを投稿しました")
         
-        # 各論文を個別に送信（メッセージ長制限対策）
-        for idx, paper in enumerate(papers_list, 1):
-            if not paper.strip():
-                continue
-                
-            # 論文情報を整形
-            paper_content = f"**【{idx}】**\n{paper.strip()}"
-            
-            # メッセージが長すぎる場合は分割
-            chunks = split_message(paper_content)
-            
-            for chunk in chunks:
-                payload = {
-                    "content": chunk,
-                    "username": "ArxivDigest Bot"
-                }
-                response = requests.post(webhook_url, json=payload)
-                
-                if response.status_code not in [200, 204]:
-                    print(f"論文 {idx} の投稿に失敗しました: {response.status_code}")
-                    continue
-                
-                # Rate limit対策（少し待機）
-                import time
-                time.sleep(0.5)
-            
-            print(f"✓ 論文 {idx}/{len(papers_list)} を投稿しました")
+        # 論文リストを1つのメッセージにまとめる（上位10件まで）
+        max_papers = 10
+        display_papers = papers_list[:max_papers]
         
-        print(f"\n🎉 Discord投稿完了！ {len(papers_list)}件の論文を投稿しました")
+        if len(papers_list) > max_papers:
+            footer = f"\n\n... 他 {len(papers_list) - max_papers} 件の論文があります（digest.htmlを参照）"
+        else:
+            footer = ""
+        
+        # 論文を番号付きでまとめる
+        papers_content = ""
+        for idx, paper in enumerate(display_papers, 1):
+            if paper.strip():
+                papers_content += f"\n**【{idx}】**\n{paper.strip()}\n"
+        
+        papers_content += footer
+        
+        # メッセージが長すぎる場合は分割して送信
+        chunks = split_message(papers_content)
+        
+        for chunk_idx, chunk in enumerate(chunks, 1):
+            payload = {
+                "content": chunk,
+                "username": "ArxivDigest Bot"
+            }
+            response = requests.post(webhook_url, json=payload)
+            
+            if response.status_code not in [200, 204]:
+                print(f"チャンク {chunk_idx} の投稿に失敗しました: {response.status_code}")
+                continue
+            
+            # Rate limit対策（少し待機）
+            import time
+            time.sleep(1)
+            
+            print(f"✓ チャンク {chunk_idx}/{len(chunks)} を投稿しました")
+        
+        print(f"\n🎉 Discord投稿完了！ {min(len(papers_list), max_papers)}件の論文を投稿しました（全{len(papers_list)}件中）")
         return True
         
     except Exception as e:
