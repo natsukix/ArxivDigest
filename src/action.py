@@ -11,6 +11,7 @@ import openai
 from relevancy import generate_relevance_score, process_subject_fields
 from download_new_papers import get_papers
 from discord_notifier import send_to_discord, send_error_to_discord
+from summarizer import generate_summaries_batch
 
 
 # Hackathon quality code. Don't judge too harshly.
@@ -319,16 +320,28 @@ if __name__ == "__main__":
             f.write(body)
         print("✓ Generated digest.html")
         
-        # Discord notification
-        if discord_webhook:
+        # 要約生成とDiscord通知
+        if discord_webhook and papers:
+            # 重要な論文のみに絞り込み（interest指定時はすでにLLMでフィルタ済み）
+            if interest:
+                print(f"\n{len(papers)}件の重要論文の要約を生成します...")
+                papers_with_summary = generate_summaries_batch(papers, model_name="gpt-3.5-turbo")
+            else:
+                # interestが未設定の場合は要約なしで投稿
+                print(f"\n{len(papers)}件の論文を投稿します（要約なし）...")
+                papers_with_summary = papers
+            
             print("\nPosting to Discord...")
             send_to_discord(
                 webhook_url=discord_webhook,
                 papers_html=body,
                 topic=topic,
                 categories=categories if categories else ["All"],
-                threshold=threshold
+                threshold=threshold,
+                papers_with_summary=papers_with_summary if interest else None
             )
+        elif discord_webhook:
+            print("\nNo papers found. Skipping Discord notification.")
         else:
             print("\nNo Discord webhook URL found. Skipping Discord notification.")
         

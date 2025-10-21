@@ -21,3 +21,9 @@ threshold: 7
 # This can be empty, which just return a full list of papers with no judgement or filtering,
 # in whatever order arXiv responds with.
 interest: |
+  1. Large language model pretraining, finetuning, and prompting techniques
+  2. Multimodal machine learning (vision-language models, audio-language models, etc.)
+  3. Novel neural network architectures and training methods
+  4. Practical applications and real-world deployments of AI/ML systems
+  5. Not interested in papers focused on specific languages (e.g., Arabic, Chinese-specific NLP)
+  6. Not interested in narrow application papers (e.g., medical diagnosis for specific diseases)
