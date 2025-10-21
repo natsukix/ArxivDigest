@@ -49,23 +49,59 @@ def post_process_chat_gpt_response(paper_data, response, threshold_score=8):
     content = re.sub(r'```json\s*', '', content)
     content = re.sub(r'```\s*', '', content)
     
-    json_items = content.replace("\n\n", "\n").split("\n")
-    pattern = r"^\d+\.\s*|\\"
     import pprint
-    try:
-        score_items = []
-        for line in json_items:
-            if line.strip() and "relevancy score" in line.lower():
-                # 番号とドットを削除
-                clean_line = re.sub(pattern, "", line).strip()
-                # まだ番号が残っている場合は再度削除
-                clean_line = re.sub(r'^\d+\.', '', clean_line).strip()
-                if clean_line:
-                    score_items.append(json.loads(clean_line))
-    except Exception as e:
-        print(f"JSON parse error: {e}")
-        pprint.pprint([re.sub(pattern, "", line).strip() for line in json_items if "relevancy score" in line.lower()])
-        raise RuntimeError("failed")
+    score_items = []
+    
+    # 複数行の整形されたJSON形式を検出（{...}形式）
+    # マルチラインJSONを検出して結合
+    json_objects = []
+    buffer = []
+    brace_count = 0
+    
+    for line in content.split('\n'):
+        stripped = line.strip()
+        if not stripped:
+            continue
+            
+        # 開き括弧をカウント
+        brace_count += stripped.count('{') - stripped.count('}')
+        buffer.append(line)
+        
+        # 括弧が閉じたらJSONオブジェクトとして処理
+        if brace_count == 0 and buffer:
+            json_str = '\n'.join(buffer)
+            if 'relevancy score' in json_str.lower():
+                json_objects.append(json_str)
+            buffer = []
+    
+    # まずマルチラインJSONをパース
+    if json_objects:
+        try:
+            for json_str in json_objects:
+                score_items.append(json.loads(json_str))
+        except Exception as e:
+            print(f"Multi-line JSON parse error: {e}")
+            # フォールバック：単一行JSONとして処理
+            pass
+    
+    # フォールバック：単一行JSON形式の処理
+    if not score_items:
+        json_items = content.replace("\n\n", "\n").split("\n")
+        pattern = r"^\d+\.\s*|\\"
+        try:
+            for line in json_items:
+                if line.strip() and "relevancy score" in line.lower():
+                    # 番号とドットを削除
+                    clean_line = re.sub(pattern, "", line).strip()
+                    # まだ番号が残っている場合は再度削除
+                    clean_line = re.sub(r'^\d+\.', '', clean_line).strip()
+                    if clean_line:
+                        score_items.append(json.loads(clean_line))
+        except Exception as e:
+            print(f"Single-line JSON parse error: {e}")
+            pprint.pprint([re.sub(pattern, "", line).strip() for line in json_items if "relevancy score" in line.lower()])
+            raise RuntimeError("failed")
+    
     pprint.pprint(score_items)
     scores = []
     for item in score_items:
