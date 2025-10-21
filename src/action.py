@@ -10,7 +10,6 @@ from dotenv import load_dotenv
 import openai
 from relevancy import generate_relevance_score, process_subject_fields
 from download_new_papers import get_papers
-from discord_notifier import send_to_discord, send_error_to_discord
 
 
 # Hackathon quality code. Don't judge too harshly.
@@ -224,42 +223,25 @@ category_map = {
 
 def generate_body(topic, categories, interest, threshold):
     if topic == "Physics":
-        raise RuntimeError("物理学のサブトピックを選択する必要があります。")
+        raise RuntimeError("You must choose a physics subtopic.")
     elif topic in physics_topics:
         abbr = physics_topics[topic]
     elif topic in topics:
         abbr = topics[topic]
     else:
-        raise RuntimeError(f"無効なトピック: {topic}")
+        raise RuntimeError(f"Invalid topic {topic}")
     if categories:
         for category in categories:
             if category not in category_map[topic]:
-                raise RuntimeError(f"{category}は{topic}のカテゴリではありません")
+                raise RuntimeError(f"{category} is not a category of {topic}")
         papers = get_papers(abbr)
-        print(f"\n=== 論文取得結果 ===")
-        print(f"総論文数: {len(papers)}")
-        
-        # 最初の5件のカテゴリをログ出力
-        print(f"\n最初の5件のカテゴリ情報:")
-        for i, paper in enumerate(papers[:5]):
-            print(f"\n論文 {i+1}:")
-            print(f"  タイトル: {paper['title'][:80]}...")
-            print(f"  生のsubjects: {paper['subjects']}")
-            processed = process_subject_fields(paper['subjects'])
-            print(f"  処理後: {processed}")
-            matches = set(processed) & set(categories)
-            print(f"  マッチ: {matches if matches else 'なし'}")
-        
-        print(f"\nフィルタ条件: {categories}")
         papers = [
             t
             for t in papers
             if bool(set(process_subject_fields(t["subjects"])) & set(categories))
         ]
-        print(f"フィルタ後の論文数: {len(papers)}")
     else:
         papers = get_papers(abbr)
-        print(f"総論文数: {len(papers)} (カテゴリフィルタなし)")
     if interest:
         relevancy, hallucination = generate_relevance_score(
             papers,
@@ -269,19 +251,19 @@ def generate_body(topic, categories, interest, threshold):
         )
         body = "<br><br>".join(
             [
-                f'タイトル: <a href="{paper["main_page"]}">{paper["title"]}</a><br>著者: {paper["authors"]}<br>スコア: {paper["Relevancy score"]}<br>理由: {paper["Reasons for match"]}'
+                f'Title: <a href="{paper["main_page"]}">{paper["title"]}</a><br>Authors: {paper["authors"]}<br>Score: {paper["Relevancy score"]}<br>Reason: {paper["Reasons for match"]}'
                 for paper in relevancy
             ]
         )
         if hallucination:
             body = (
-                "警告: モデルが存在しない論文を生成した可能性があります。削除を試みましたが、スコアが正確でない可能性があります。<br><br>"
+                "Warning: the model hallucinated some papers. We have tried to remove them, but the scores may not be accurate.<br><br>"
                 + body
             )
     else:
         body = "<br><br>".join(
             [
-                f'タイトル: <a href="{paper["main_page"]}">{paper["title"]}</a><br>著者: {paper["authors"]}'
+                f'Title: <a href="{paper["main_page"]}">{paper["title"]}</a><br>Authors: {paper["authors"]}'
                 for paper in papers
             ]
         )
@@ -300,7 +282,7 @@ if __name__ == "__main__":
         config = yaml.safe_load(f)
 
     if "OPENAI_API_KEY" not in os.environ:
-        raise RuntimeError("OpenAI APIキーが見つかりません")
+        raise RuntimeError("No openai api key found")
     openai.api_key = os.environ.get("OPENAI_API_KEY")
 
     topic = config["topic"]
@@ -309,44 +291,23 @@ if __name__ == "__main__":
     to_email = os.environ.get("TO_EMAIL")
     threshold = config["threshold"]
     interest = config["interest"]
-    discord_webhook = os.environ.get("DISCORD_WEBHOOK_URL")
-    
-    try:
-        body = generate_body(topic, categories, interest, threshold)
-        with open("digest.html", "w", encoding="utf-8") as f:
-            f.write(body)
-        print("✓ digest.htmlを生成しました")
-        
-        # Discord投稿
-        if discord_webhook:
-            print("\nDiscordに投稿しています...")
-            send_to_discord(discord_webhook, body, topic, categories, threshold)
-        else:
-            print("Discord Webhook URLが設定されていません。Discord投稿をスキップします。")
-        
-        # メール送信（オプション）
-        if os.environ.get("SENDGRID_API_KEY", None) and from_email and to_email:
-            sg = SendGridAPIClient(api_key=os.environ.get("SENDGRID_API_KEY"))
-            from_email = Email(from_email)
-            to_email = To(to_email)
-            subject = date.today().strftime("パーソナライズされたarXivダイジェスト - %Y年%m月%d日")
-            content = Content("text/html", body)
-            mail = Mail(from_email, to_email, subject, content)
-            mail_json = mail.get()
+    body = generate_body(topic, categories, interest, threshold)
+    with open("digest.html", "w") as f:
+        f.write(body)
+    if os.environ.get("SENDGRID_API_KEY", None):
+        sg = SendGridAPIClient(api_key=os.environ.get("SENDGRID_API_KEY"))
+        from_email = Email(from_email)  # Change to your verified sender
+        to_email = To(to_email)
+        subject = date.today().strftime("Personalized arXiv Digest, %d %b %Y")
+        content = Content("text/html", body)
+        mail = Mail(from_email, to_email, subject, content)
+        mail_json = mail.get()
 
-            # Send an HTTP POST request to /mail/send
-            response = sg.client.mail.send.post(request_body=mail_json)
-            if response.status_code >= 200 and response.status_code <= 300:
-                print("✓ メール送信: 成功!")
-            else:
-                print(f"✗ メール送信: 失敗 ({response.status_code}, {response.text})")
+        # Send an HTTP POST request to /mail/send
+        response = sg.client.mail.send.post(request_body=mail_json)
+        if response.status_code >= 200 and response.status_code <= 300:
+            print("Send test email: Success!")
         else:
-            print("SendGrid APIキーまたはメールアドレスが設定されていません。メール送信をスキップします。")
-    
-    except Exception as e:
-        error_msg = f"エラーが発生しました: {str(e)}"
-        print(f"✗ {error_msg}")
-        if discord_webhook:
-            send_error_to_discord(discord_webhook, error_msg)
-        raise
-        raise
+            print("Send test email: Failure ({response.status_code}, {response.text})")
+    else:
+        print("No sendgrid api key found. Skipping email")

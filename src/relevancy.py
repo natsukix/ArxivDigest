@@ -48,7 +48,7 @@ def post_process_chat_gpt_response(paper_data, response, threshold_score=8):
             for line in json_items if "relevancy score" in line.lower()]
     except Exception:
         pprint.pprint([re.sub(pattern, "", line) for line in json_items if "relevancy score" in line.lower()])
-        raise RuntimeError("処理に失敗しました")
+        raise RuntimeError("failed")
     pprint.pprint(score_items)
     scores = []
     for item in score_items:
@@ -67,9 +67,9 @@ def post_process_chat_gpt_response(paper_data, response, threshold_score=8):
         # if the decoding stops due to length, the last example is likely truncated so we discard it
         if scores[idx] < threshold_score:
             continue
-        output_str = "タイトル: " + paper_data[idx]["title"] + "\n"
-        output_str += "著者: " + paper_data[idx]["authors"] + "\n"
-        output_str += "リンク: " + paper_data[idx]["main_page"] + "\n"
+        output_str = "Title: " + paper_data[idx]["title"] + "\n"
+        output_str += "Authors: " + paper_data[idx]["authors"] + "\n"
+        output_str += "Link: " + paper_data[idx]["main_page"] + "\n"
         for key, value in inst.items():
             paper_data[idx][key] = value
             output_str += str(key) + ": " + str(value) + "\n"
@@ -119,7 +119,7 @@ def generate_relevance_score(
             decoding_args=decoding_args,
             logit_bias={"100257": -100},  # prevent the <|endoftext|> from being generated
         )
-        print ("レスポンス", response['message']['content'])
+        print ("response", response['message']['content'])
         request_duration = time.time() - request_start
 
         process_start = time.time()
@@ -127,8 +127,8 @@ def generate_relevance_score(
         hallucination = hallucination or hallu
         ans_data.extend(batch_data)
 
-        print(f"リクエスト {request_idx+1} は {request_duration:.2f}秒かかりました")
-        print(f"後処理は {time.time() - process_start:.2f}秒かかりました")
+        print(f"Request {request_idx+1} took {request_duration:.2f}s")
+        print(f"Post-processing took {time.time() - process_start:.2f}s")
 
     if sorting:
         ans_data = sorted(ans_data, key=lambda x: int(x["Relevancy score"]), reverse=True)
@@ -148,16 +148,16 @@ def run_all_day_paper(
     if date is None:
         date = datetime.today().strftime('%a, %d %b %y')
         # string format such as Wed, 10 May 23
-    print ("arXivデータの日付: ", date)
+    print ("the date for the arxiv data is: ", date)
 
     all_papers = [json.loads(l) for l in open(f"{data_dir}/{date}.jsonl", "r")]
-    print (f"{len(all_papers)}件の論文が見つかりました。")
+    print (f"We found {len(all_papers)}.")
 
     all_papers_in_subjects = [
         t for t in all_papers
         if bool(set(process_subject_fields(t['subjects'])) & set(query['subjects']))
     ]
-    print(f"カテゴリでフィルタリング後、{len(all_papers_in_subjects)}件の論文が残りました。")
+    print(f"After filtering subjects, we have {len(all_papers_in_subjects)} papers left.")
     ans_data = generate_relevance_score(all_papers_in_subjects, query, model_name, threshold_score, num_paper_in_prompt, temperature, top_p)
     utils.write_ans_to_file(ans_data, date, output_dir="../outputs")
     return ans_data
