@@ -30,4 +30,4 @@ jobs:
           FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
           TO_EMAIL: ${{ secrets.TO_EMAIL }}
         run: |
-          python -m src.run_digest
+          python src/action.py
