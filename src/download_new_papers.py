@@ -72,3 +72,26 @@ def get_papers(field_abbr, limit=None):
                 return results
             results.append(json.loads(line))
     return results
+
+
+def get_papers_from_multiple_topics(topic_abbreviations, limit=None):
+    """
+    複数のトピックから論文を取得し、統合したリストを返す
+    
+    Args:
+        topic_abbreviations: dict of {abbreviation: topic_name}
+        limit: 各トピックあたりの論文数制限（Noneの場合は全件取得）
+    
+    Returns:
+        全トピックの論文を統合したリスト
+    """
+    all_papers = []
+    
+    for abbr, topic_name in topic_abbreviations.items():
+        print(f"Downloading papers from {topic_name} ({abbr})...")
+        papers = get_papers(abbr, limit=limit)
+        print(f"  Retrieved {len(papers)} papers from {topic_name}")
+        all_papers.extend(papers)
+    
+    print(f"\nTotal papers retrieved: {len(all_papers)}")
+    return all_papers

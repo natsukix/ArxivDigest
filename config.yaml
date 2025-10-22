@@ -1,28 +1,44 @@
-# For physics topics, use the specific subtopics, e.g. "Astrophysics"
-topic: "Computer Science"
-# An empty list here will include all categories in a topic
-# Use the natural language names of the topics, found here: https://arxiv.org
-# Including more categories will result in more calls to the large language model
-categories: ["Artificial Intelligence", "Computation and Language", "Machine Learning", "Computer Vision and Pattern Recognition"]
+# カテゴリのリストを指定してください（複数のトピックにまたがっても構いません）
+# カテゴリの自然言語名を使用してください（https://arxiv.org で確認できます）
+# より多くのカテゴリを含めると、大規模言語モデルへの呼び出しが増加します
+# 
+# 例: ["Artificial Intelligence", "Systems and Control", "Number Theory"]
+# この例では、Computer Science、Electrical Engineering、Mathematicsの3つのトピックから自動的に論文を取得します
+# //https://arxiv.org/category_taxonomy
+# arxiv_category_taxonomy_jp.mdの興味のある英語カテゴリ名を入れる
+categories: [
+  "Artificial Intelligence",
+  "Robotics",
+  "Machine Learning",
+  "Computer Vision and Pattern Recognition",
+  "Audio and Speech Processing",
+  "Image and Video Processing"
+  ]
 
-# Relevance score threshold. abstracts that receive a score less than this from the large language model
-# will have their papers filtered out.
+# 関連性スコアの閾値。大規模言語モデルからこの値未満のスコアを受け取った論文は
+# フィルタリングされます。
 #
-# Must be within 1-10
+# 1-10の範囲で設定する必要があります
 threshold: 7
 
-# Maximum total number of papers to process (will be distributed equally across categories)
-max_papers: 5
+# LLMで処理する論文の最大総数（カテゴリ間で均等に分配されます）
+max_papers: 12
 
-# A natural language statement that the large language model will use to judge which papers are relevant 
+# LLM評価フェーズで使用するモデル（デフォルト: gpt-4o-mini）
+evaluation_model: "gpt-5-nano"
+
+# 要約生成フェーズで使用するモデル（デフォルト: gpt-3.5-turbo）
+summary_model: "gpt-5-nano"
+
+# 大規模言語モデルがどの論文が関連しているかを判断するために使用する自然言語の記述
 #
-# For example:
+# 例:
 #     "I am interested in complexity theory papers that establish upper bounds"
 #     "gas chromatography, mass spectrometry"
 #     "making lots of money"
 #
-# This can be empty, which just return a full list of papers with no judgement or filtering,
-# in whatever order arXiv responds with.
+# これは空でも構いません。その場合、判断やフィルタリングなしに、arXivが応答する順序で
+# 全ての論文リストを返します。
 interest: |
   1. Large language model pretraining, finetuning, and prompting techniques
   2. Multimodal machine learning (vision-language models, audio-language models, etc.)

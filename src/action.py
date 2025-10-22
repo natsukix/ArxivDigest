@@ -1,3 +1,4 @@
+import os
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail, Email, To, Content
 
@@ -5,14 +6,12 @@ from datetime import date
 
 import argparse
 import yaml
-import os
 from dotenv import load_dotenv
 import openai
 from relevancy import generate_relevance_score, process_subject_fields
 from download_new_papers import get_papers
 from discord_notifier import send_to_discord, send_error_to_discord
 from summarizer import generate_summaries_batch
-
 
 # Hackathon quality code. Don't judge too harshly.
 # Feel free to submit pull requests to improve the code.
@@ -223,6 +222,40 @@ category_map = {
 }
 
 
+def get_topic_abbreviations_for_categories(categories):
+    """
+    カテゴリリストから必要なトピックのabbreviation（略称）リストを取得
+    
+    Args:
+        categories: カテゴリ名のリスト
+    
+    Returns:
+        dict: {abbreviation: topic_name} の辞書
+        例: {"cs": "Computer Science", "eess": "Electrical Engineering and Systems Science"}
+    """
+    abbreviations = {}
+    
+    for category in categories:
+        # category_mapから該当するトピックを検索
+        for topic_name, topic_categories in category_map.items():
+            if category in topic_categories:
+                # トピック名からabbreviationを取得
+                if topic_name in topics:
+                    abbr = topics[topic_name]
+                elif topic_name in physics_topics:
+                    abbr = physics_topics[topic_name]
+                else:
+                    raise RuntimeError(f"Unknown topic: {topic_name}")
+                
+                if abbr:  # 空文字列でない場合のみ追加
+                    abbreviations[abbr] = topic_name
+    
+    if not abbreviations:
+        raise RuntimeError(f"No valid topics found for categories: {categories}")
+    
+    return abbreviations
+
+
 def distribute_papers_by_category(papers, categories, max_total=300):
     """
     カテゴリ毎に論文を均等配分する
@@ -257,31 +290,63 @@ def distribute_papers_by_category(papers, categories, max_total=300):
     print(f"Number of categories: {len(categories)}")
     print(f"Max papers per category: {max_per_category}")
     
-    # 各カテゴリから最大数まで抽出
+    # 各カテゴリから関連性スコア順に最大数まで抽出
     balanced_papers = []
     for cat, cat_papers in papers_by_category.items():
-        selected = cat_papers[:max_per_category]
+        # 関連性スコアでソート（スコアがある場合のみ）
+        if cat_papers and 'Relevancy score' in cat_papers[0]:
+            # スコアを数値に変換してソート（降順）
+            cat_papers_sorted = sorted(
+                cat_papers, 
+                key=lambda x: float(x.get('Relevancy score', 0)) if isinstance(x.get('Relevancy score'), (int, float, str)) else 0,
+                reverse=True
+            )
+        else:
+            cat_papers_sorted = cat_papers
+        
+        selected = cat_papers_sorted[:max_per_category]
         balanced_papers.extend(selected)
-        print(f"  {cat}: selected {len(selected)}/{len(cat_papers)} papers")
+        
+        # 選択された論文のスコアを表示
+        if selected and 'Relevancy score' in selected[0]:
+            scores = [x.get('Relevancy score', 'N/A') for x in selected]
+            print(f"  {cat}: selected {len(selected)}/{len(cat_papers)} papers (scores: {scores})")
+        else:
+            print(f"  {cat}: selected {len(selected)}/{len(cat_papers)} papers")
     
     print(f"\nTotal papers after balancing: {len(balanced_papers)}")
     return balanced_papers
 
 
-def generate_body(topic, categories, interest, threshold, max_papers=300):
-    if topic == "Physics":
-        raise RuntimeError("You must choose a physics subtopic.")
-    elif topic in physics_topics:
-        abbr = physics_topics[topic]
-    elif topic in topics:
-        abbr = topics[topic]
-    else:
-        raise RuntimeError(f"Invalid topic {topic}")
+def generate_body(categories, interest, threshold, max_papers=300, evaluation_model="gpt-4o-mini", summary_model="gpt-3.5-turbo"):
+    """
+    カテゴリリストに基づいて論文を取得し、LLM評価を実行
+    
+    Args:
+        categories: カテゴリ名のリスト（複数のトピックにまたがってもOK）
+        interest: LLM評価用の興味対象記述
+        threshold: 重要度スコアの閾値
+        max_papers: LLM評価にかける最大論文数
+        evaluation_model: LLM評価に使用するモデル名
+        summary_model: 要約生成に使用するモデル名
+    
+    Returns:
+        body: HTML形式の論文リスト
+        papers: 論文のリスト（評価済みまたは未評価）
+        hallucination: 幻覚検出フラグ
+    """
+    from download_new_papers import get_papers_from_multiple_topics
+    
     if categories:
-        for category in categories:
-            if category not in category_map[topic]:
-                raise RuntimeError(f"{category} is not a category of {topic}")
-        papers = get_papers(abbr)
+        # カテゴリから必要なトピックのabbreviationを取得
+        topic_abbreviations = get_topic_abbreviations_for_categories(categories)
+        print(f"\n=== Topic Detection ===")
+        print(f"Required topics for categories {categories}:")
+        for abbr, topic_name in topic_abbreviations.items():
+            print(f"  - {topic_name} ({abbr})")
+        
+        # 複数トピックから論文を取得
+        papers = get_papers_from_multiple_topics(topic_abbreviations)
         print(f"\n=== Paper Acquisition Results ===")
         print(f"Total papers: {len(papers)}")
         
@@ -303,21 +368,21 @@ def generate_body(topic, categories, interest, threshold, max_papers=300):
             if bool(set(process_subject_fields(t["subjects"])) & set(categories))
         ]
         print(f"Papers after filtering: {len(papers)}")
-        
-        # カテゴリ毎に均等配分
-        if len(papers) > max_papers:
-            papers = distribute_papers_by_category(papers, categories, max_total=max_papers)
     else:
-        papers = get_papers(abbr)
-        print(f"Total papers: {len(papers)} (no category filter)")
+        # カテゴリ指定なしの場合はエラー
+        raise RuntimeError("Categories must be specified")
+    
     if interest:
-        # LLM評価と要約を実行
-        print(f"\n=== LLM Evaluation & Summarization ===")
+        # LLM評価を実行（フィルタ後の全論文を評価）
+        print(f"\n=== LLM Evaluation ===")
+        print(f"Using evaluation model: {evaluation_model}")
+        print(f"Evaluating {len(papers)} papers...")
         relevancy, hallucination = generate_relevance_score(
             papers,
             query={"interest": interest},
             threshold_score=threshold,
             num_paper_in_prompt=16,
+            model_name=evaluation_model,
         )
         
         # デバッグ情報
@@ -326,10 +391,17 @@ def generate_body(topic, categories, interest, threshold, max_papers=300):
         print(f"[DEBUG] relevancy length: {len(relevancy) if relevancy else 0}")
         print(f"[DEBUG] hallucination: {hallucination}")
         
+        # 閾値通過後にカテゴリ毎に均等配分
+        if len(relevancy) > max_papers:
+            print(f"\n=== Category-based Distribution (After Threshold) ===")
+            relevancy = distribute_papers_by_category(relevancy, categories, max_total=max_papers)
+        
         # 閾値以上の論文に要約を生成
-        print(f"\n{len(relevancy)}件の重要論文（スコア≥{threshold}）の要約を生成します...")
+        print(f"\n=== Summarization ===")
+        print(f"Generating summaries for {len(relevancy)} important papers (score >= {threshold})...")
+        print(f"Using summary model: {summary_model}")
         from summarizer import generate_summaries_batch
-        relevancy = generate_summaries_batch(relevancy, model_name="gpt-3.5-turbo")
+        relevancy = generate_summaries_batch(relevancy, model_name=summary_model)
         print(f"[DEBUG] Summarization completed for {len(relevancy)} papers")
         
         body = "<br><br>".join(
@@ -363,40 +435,46 @@ if __name__ == "__main__":
         "--config", help="yaml config file to use", default="config.yaml"
     )
     args = parser.parse_args()
-    with open(args.config, "r") as f:
+    with open(args.config, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
     if "OPENAI_API_KEY" not in os.environ:
         raise RuntimeError("No openai api key found")
     openai.api_key = os.environ.get("OPENAI_API_KEY")
 
-    topic = config["topic"]
     categories = config["categories"]
     from_email = os.environ.get("FROM_EMAIL")
     to_email = os.environ.get("TO_EMAIL")
     threshold = config["threshold"]
     interest = config["interest"]
     max_papers = config.get("max_papers", 300)  # デフォルトは300
+    evaluation_model = config.get("evaluation_model", "gpt-4o-mini")  # デフォルトはgpt-4o-mini
+    summary_model = config.get("summary_model", "gpt-3.5-turbo")  # デフォルトはgpt-3.5-turbo
     discord_webhook = os.environ.get("DISCORD_WEBHOOK_URL")
     
     try:
         print(f"\n[DEBUG] Starting generate_body...")
-        body, papers, hallucination = generate_body(topic, categories, interest, threshold, max_papers)
+        body, papers, hallucination = generate_body(categories, interest, threshold, max_papers, evaluation_model, summary_model)
         print(f"[DEBUG] generate_body completed")
         print(f"[DEBUG] papers type: {type(papers)}")
         print(f"[DEBUG] papers length: {len(papers) if papers else 0}")
         
         with open("digest.html", "w", encoding="utf-8") as f:
             f.write(body)
-        print("✓ Generated digest.html")
+        print("Generated digest.html")
         
         # Discord通知（要約は既に生成済み）
         if discord_webhook and papers:
             print("\nPosting to Discord...")
+            # トピック名を自動検出
+            topic_abbreviations = get_topic_abbreviations_for_categories(categories)
+            topic_names = list(topic_abbreviations.values())
+            topic_display = ", ".join(topic_names) if len(topic_names) > 1 else topic_names[0]
+            
             send_to_discord(
                 webhook_url=discord_webhook,
                 papers_html=body,
-                topic=topic,
+                topic=topic_display,
                 categories=categories if categories else ["All"],
                 threshold=threshold,
                 papers_with_summary=papers if interest else None
@@ -421,13 +499,13 @@ if __name__ == "__main__":
                 # Send an HTTP POST request to /mail/send
                 response = sg.client.mail.send.post(request_body=mail_json)
                 if response.status_code >= 200 and response.status_code <= 300:
-                    print("✓ Send email: Success!")
+                    print("Send email: Success!")
                 else:
-                    print(f"✗ Send email: Failure ({response.status_code}, {response.text})")
+                    print(f"Send email: Failure ({response.status_code}, {response.text})")
             except Exception as email_error:
-                print(f"✗ Email sending failed: {email_error}")
+                print(f"Email sending failed: {email_error}")
         else:
-            print("ℹ️ No SendGrid API key or email address configured. Skipping email.")
+            print("No SendGrid API key or email address configured. Skipping email.")
     
     except Exception as e:
         import traceback

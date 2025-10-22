@@ -3,7 +3,14 @@
 """
 import openai
 import time
+import sys
+import io
 from typing import List, Dict
+
+# Windows環境でのUnicode出力対応
+if sys.platform == 'win32':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 
 SUMMARY_PROMPT = """You are an AI research assistant. Your task is to read the following arXiv paper's title, authors, and abstract, then generate a comprehensive summary in both English and Japanese.
@@ -91,7 +98,7 @@ def generate_summaries_batch(papers: List[Dict], model_name: str = "gpt-3.5-turb
     Returns:
         List[Dict]: 要約付きの論文情報リスト
     """
-    print(f"\n要約生成中... ({len(papers)}件)")
+    print(f"\nGenerating summaries... ({len(papers)} papers)")
     
     for idx, paper in enumerate(papers, 1):
         print(f"  {idx}/{len(papers)}: {paper.get('title', '')[:60]}...")
@@ -103,5 +110,5 @@ def generate_summaries_batch(papers: List[Dict], model_name: str = "gpt-3.5-turb
         if idx < len(papers):
             time.sleep(1)
     
-    print("✓ 要約生成完了")
+    print("Summary generation completed")
     return papers

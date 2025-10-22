@@ -106,10 +106,10 @@ def send_to_discord(webhook_url, papers_html, topic, categories, threshold, pape
         response = requests.post(webhook_url, json=payload)
         
         if response.status_code not in [200, 204]:
-            print(f"Discordへの投稿に失敗しました: {response.status_code}")
+            print(f"Failed to post to Discord: {response.status_code}")
             return False
         
-        print(f"✓ Discordにヘッダーを投稿しました")
+        print(f"Posted header to Discord")
         
         # 要約付き論文がある場合は個別投稿（カテゴリ毎に上位2件）
         if papers_with_summary:
@@ -194,11 +194,11 @@ def send_to_discord(webhook_url, papers_html, topic, categories, threshold, pape
                     response = requests.post(webhook_url, json=payload)
                     
                     if response.status_code not in [200, 204]:
-                        print(f"論文投稿に失敗しました: {response.status_code}")
+                        print(f"Failed to post paper: {response.status_code}")
                         continue
                     
                     total_posted += 1
-                    print(f"✓ {category}: 論文 {idx}/{min(len(cat_papers), max_per_category)} を投稿")
+                    print(f"Posted {category}: paper {idx}/{min(len(cat_papers), max_per_category)}")
                     
                     # Rate limit対策
                     time.sleep(1.5)
@@ -238,14 +238,14 @@ def send_to_discord(webhook_url, papers_html, topic, categories, threshold, pape
             response = requests.post(webhook_url, json=payload)
             
             if response.status_code not in [200, 204]:
-                print(f"論文リストの投稿に失敗しました: {response.status_code}")
+                print(f"Failed to post paper list: {response.status_code}")
                 return False
             
-            print(f"✓ 論文リストを投稿しました")
+            print(f"Posted paper list to Discord")
         
         total_count = len(papers_with_summary) if papers_with_summary else len(papers_list)
         display_count = min(total_count, 5 if papers_with_summary else 10)
-        print(f"\n🎉 Discord投稿完了！ {display_count}件の論文を投稿しました（全{total_count}件中）")
+        print(f"\nDiscord posting completed! Posted {display_count} papers (out of {total_count} total)")
         return True
         
     except Exception as e:
