@@ -253,7 +253,7 @@ def send_to_discord(webhook_url, papers_html, topic, categories, threshold, pape
         return False
 
 
-def send_to_discord_forum(bot_token, forum_channel_id, papers_html, topic, categories, threshold, papers_with_summary=None):
+def send_to_discord_forum(bot_token, forum_channel_id, papers_html, topic, categories, threshold, papers_with_summary=None, max_per_category=2):
     """
     Discordのフォーラムチャンネルに1日1トピックとして投稿
     
@@ -265,6 +265,7 @@ def send_to_discord_forum(bot_token, forum_channel_id, papers_html, topic, categ
         categories: カテゴリリスト
         threshold: 関連性スコア閾値
         papers_with_summary: 要約付き論文リスト（オプション）
+        max_per_category: カテゴリごとの最大投稿数（デフォルト: 2）
     
     Returns:
         bool: 成功した場合True
@@ -338,9 +339,8 @@ def send_to_discord_forum(bot_token, forum_channel_id, papers_html, topic, categ
                         papers_by_category[matched_category] = []
                     papers_by_category[matched_category].append(paper)
             
-            print(f"\n=== Posting to forum thread: Top 2 per category ===")
+            print(f"\n=== Posting to forum thread: Top {max_per_category} per category ===")
             total_posted = 0
-            max_per_category = 2
             
             # スレッドにメッセージを投稿するエンドポイント
             message_url = f"https://discord.com/api/v10/channels/{thread_id}/messages"

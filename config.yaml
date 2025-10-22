@@ -12,7 +12,8 @@ categories: [
   "Machine Learning",
   "Computer Vision and Pattern Recognition",
   "Audio and Speech Processing",
-  "Image and Video Processing"
+  "Image and Video Processing",
+  "Multiagent Systems"
   ]
 
 # 関連性スコアの閾値。大規模言語モデルからこの値未満のスコアを受け取った論文は
@@ -40,9 +41,18 @@ summary_model: "gpt-4o-mini"
 # これは空でも構いません。その場合、判断やフィルタリングなしに、arXivが応答する順序で
 # 全ての論文リストを返します。
 interest: |
-  1. Large language model pretraining, finetuning, and prompting techniques
-  2. Multimodal machine learning (vision-language models, audio-language models, etc.)
-  3. Novel neural network architectures and training methods
-  4. Practical applications and real-world deployments of AI/ML systems
-  5. Not interested in papers focused on specific languages (e.g., Arabic, Chinese-specific NLP)
-  6. Not interested in narrow application papers (e.g., medical diagnosis for specific diseases)
+  **Priority: Groundbreaking papers that achieve state-of-the-art (SotA) results in their respective categories**
+  
+  I am particularly interested in:
+  1. Papers reporting new SotA performance on established benchmarks
+  2. Novel breakthrough methods that significantly advance the field
+  3. Large language model pretraining, finetuning, and prompting techniques with empirical improvements
+  4. Multimodal machine learning (vision-language models, audio-language models, etc.) showing superior results
+  5. Innovative neural network architectures and training methods that outperform existing approaches
+  6. Practical applications and real-world deployments of AI/ML systems with demonstrated impact
+  
+  Lower priority or not interested in:
+  - Papers focused on specific languages (e.g., Arabic, Chinese-specific NLP)
+  - Narrow application papers (e.g., medical diagnosis for specific diseases)
+  - Incremental improvements without significant novelty
+  - Papers without clear performance comparisons to baselines

@@ -475,6 +475,9 @@ if __name__ == "__main__":
             topic_names = list(topic_abbreviations.values())
             topic_display = ", ".join(topic_names) if len(topic_names) > 1 else topic_names[0]
             
+            # カテゴリごとの最大投稿数を計算
+            max_per_category = config.get("max_total_papers", 12) // len(categories) if categories else 2
+            
             send_to_discord_forum(
                 bot_token=discord_bot_token,
                 forum_channel_id=discord_forum_channel_id,
@@ -482,7 +485,8 @@ if __name__ == "__main__":
                 topic=topic_display,
                 categories=categories if categories else ["All"],
                 threshold=threshold,
-                papers_with_summary=papers if interest else None
+                papers_with_summary=papers if interest else None,
+                max_per_category=max_per_category
             )
         elif discord_webhook and papers:
             print("\nPosting to Discord (Webhook mode)...")
