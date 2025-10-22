@@ -451,6 +451,8 @@ if __name__ == "__main__":
     evaluation_model = config.get("evaluation_model", "gpt-4o-mini")  # デフォルトはgpt-4o-mini
     summary_model = config.get("summary_model", "gpt-3.5-turbo")  # デフォルトはgpt-3.5-turbo
     discord_webhook = os.environ.get("DISCORD_WEBHOOK_URL")
+    discord_bot_token = os.environ.get("DISCORD_BOT_TOKEN")
+    discord_forum_channel_id = os.environ.get("DISCORD_FORUM_CHANNEL_ID")
     
     try:
         print(f"\n[DEBUG] Starting generate_body...")
@@ -464,8 +466,26 @@ if __name__ == "__main__":
         print("Generated digest.html")
         
         # Discord通知（要約は既に生成済み）
-        if discord_webhook and papers:
-            print("\nPosting to Discord...")
+        # フォーラムモード優先、次にWebhook
+        if discord_bot_token and discord_forum_channel_id and papers:
+            print("\nPosting to Discord Forum...")
+            from discord_notifier import send_to_discord_forum
+            # トピック名を自動検出
+            topic_abbreviations = get_topic_abbreviations_for_categories(categories)
+            topic_names = list(topic_abbreviations.values())
+            topic_display = ", ".join(topic_names) if len(topic_names) > 1 else topic_names[0]
+            
+            send_to_discord_forum(
+                bot_token=discord_bot_token,
+                forum_channel_id=discord_forum_channel_id,
+                papers_html=body,
+                topic=topic_display,
+                categories=categories if categories else ["All"],
+                threshold=threshold,
+                papers_with_summary=papers if interest else None
+            )
+        elif discord_webhook and papers:
+            print("\nPosting to Discord (Webhook mode)...")
             # トピック名を自動検出
             topic_abbreviations = get_topic_abbreviations_for_categories(categories)
             topic_names = list(topic_abbreviations.values())
@@ -479,10 +499,10 @@ if __name__ == "__main__":
                 threshold=threshold,
                 papers_with_summary=papers if interest else None
             )
-        elif discord_webhook:
+        elif (discord_bot_token and discord_forum_channel_id) or discord_webhook:
             print("\nNo papers found. Skipping Discord notification.")
         else:
-            print("\nNo Discord webhook URL found. Skipping Discord notification.")
+            print("\nNo Discord configuration found. Skipping Discord notification.")
         
         # Email notification
         print(f"\n[DEBUG] Email check - SENDGRID_API_KEY: {bool(os.environ.get('SENDGRID_API_KEY'))}, from_email: {from_email}, to_email: {to_email}")

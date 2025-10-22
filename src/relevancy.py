@@ -46,6 +46,11 @@ def post_process_chat_gpt_response(paper_data, response, threshold_score=8):
     
     content = response['message']['content']
     
+    # デバッグ出力
+    print(f"[DEBUG] Response content type: {type(content)}")
+    print(f"[DEBUG] Response content length: {len(content) if content else 0}")
+    print(f"[DEBUG] Response content preview: {content[:500] if content else 'EMPTY'}")
+    
     # ```json ... ``` マークダウン形式を削除
     content = re.sub(r'```json\s*', '', content)
     content = re.sub(r'```\s*', '', content)
@@ -166,6 +171,7 @@ def generate_relevance_score(
             top_p=top_p,
         )
         request_start = time.time()
+        response = None
         try:
             response = utils.openai_completion(
                 prompts=prompt,
@@ -179,7 +185,8 @@ def generate_relevance_score(
             print("response", response['message']['content'])
         except Exception as e:
             print(f"Error getting response: {e}")
-            print(f"Response object: {response}")
+            if response:
+                print(f"Response object: {response}")
             raise
         request_duration = time.time() - request_start
 

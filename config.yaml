@@ -25,10 +25,10 @@ threshold: 7
 max_papers: 12
 
 # LLM評価フェーズで使用するモデル（デフォルト: gpt-4o-mini）
-evaluation_model: "gpt-5-nano"
+evaluation_model: "gpt-4o-mini"
 
 # 要約生成フェーズで使用するモデル（デフォルト: gpt-3.5-turbo）
-summary_model: "gpt-5-nano"
+summary_model: "gpt-4o-mini"
 
 # 大規模言語モデルがどの論文が関連しているかを判断するために使用する自然言語の記述
 #

@@ -69,7 +69,7 @@ def openai_completion(
             - an openai_object.OpenAIObject object (if return_text is False)
             - a list of objects of the above types (if decoding_args.n > 1)
     """
-    is_chat_model = "gpt-3.5" in model_name or "gpt-4" in model_name
+    is_chat_model = "gpt" in model_name
     is_single_prompt = isinstance(prompts, (str, dict))
     if is_single_prompt:
         prompts = [prompts]
@@ -100,12 +100,24 @@ def openai_completion(
 
         while True:
             try:
+                # gpt-5シリーズはmax_completion_tokensを使用
                 shared_kwargs = dict(
                     model=model_name,
                     **batch_decoding_args.__dict__,
                     **decoding_kwargs,
                     request_timeout=120,  # 2分のタイムアウトを追加
                 )
+                
+                # gpt-5シリーズの場合の調整
+                if "gpt-5" in model_name:
+                    # max_tokensをmax_completion_tokensに変更
+                    if "max_tokens" in shared_kwargs:
+                        shared_kwargs["max_completion_tokens"] = shared_kwargs.pop("max_tokens")
+                    # gpt-5-nanoはtemperature, logit_biasをサポートしないため削除
+                    if "nano" in model_name:
+                        shared_kwargs.pop("temperature", None)
+                        shared_kwargs.pop("logit_bias", None)
+                
                 if is_chat_model:
                     completion_batch = openai.ChatCompletion.create(
                         messages=[
@@ -118,7 +130,7 @@ def openai_completion(
                     completion_batch = openai.Completion.create(prompt=prompt_batch, **shared_kwargs)
 
                 choices = completion_batch.choices
-
+                
                 for choice in choices:
                     choice["total_tokens"] = completion_batch.usage.total_tokens
                 completions.extend(choices)
