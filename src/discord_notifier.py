@@ -137,15 +137,6 @@ def send_to_discord(webhook_url, papers_html, topic, categories, threshold, pape
             max_per_category = 2
             
             for category, cat_papers in papers_by_category.items():
-                # カテゴリヘッダー
-                category_header = f"\n━━━━━━━━━━━━━━━━━━━━\n**📂 カテゴリ: {category}** ({len(cat_papers)}件中{min(len(cat_papers), max_per_category)}件表示)\n━━━━━━━━━━━━━━━━━━━━"
-                header_payload = {
-                    "content": category_header,
-                    "username": "ArxivDigest Bot"
-                }
-                requests.post(webhook_url, json=header_payload)
-                time.sleep(1)
-                
                 # 上位2件を投稿
                 display_papers = cat_papers[:max_per_category]
                 for idx, paper in enumerate(display_papers, 1):
@@ -163,19 +154,25 @@ def send_to_discord(webhook_url, papers_html, topic, categories, threshold, pape
                     else:
                         link = '（リンク情報なし）'
                     score = paper.get('Relevancy score', 'N/A')
-                    reason = paper.get('Reasons for match', '')
+                    reason_en = paper.get('Reasons for match', '')
+                    reason_ja = paper.get('Reasons for match (ja)', '')
                     summary = paper.get('summary', {})
                     summary_en = summary.get('summary_en', '') if isinstance(summary, dict) else ''
                     summary_ja = summary.get('summary_ja', '') if isinstance(summary, dict) else ''
                     
-                    # 1論文ごとに1メッセージ
-                    paper_content = f"**【論文 {idx}/{min(len(cat_papers), max_per_category)}】**\n\n"
+                    # 1論文を1つのメッセージにまとめる（カテゴリヘッダー含む）
+                    paper_content = f"━━━━━━━━━━━━━━━━━━━━\n"
+                    paper_content += f"**📂 カテゴリ: {category}** ({len(cat_papers)}件中 {idx}/{min(len(cat_papers), max_per_category)}件目)\n"
+                    paper_content += f"━━━━━━━━━━━━━━━━━━━━\n\n"
                     paper_content += f"**📚 {title}**\n\n"
                     paper_content += f"**👥 著者:** {authors}\n"
                     paper_content += f"**⭐ 関連性スコア:** {score}/10\n\n"
                     
-                    if reason:
-                        paper_content += f"**💡 なぜ重要か:**\n{reason}\n\n"
+                    # 日本語の理由があればそれを使用、なければ英語版
+                    if reason_ja:
+                        paper_content += f"**💡 なぜ重要か:**\n{reason_ja}\n\n"
+                    elif reason_en:
+                        paper_content += f"**💡 Why Important:**\n{reason_en}\n\n"
                     
                     if summary_ja:
                         paper_content += f"**📄 要約（日本語）:**\n{summary_ja}\n\n"
