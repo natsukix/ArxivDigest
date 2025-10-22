@@ -168,11 +168,11 @@ def send_to_discord(webhook_url, papers_html, topic, categories, threshold, pape
                     paper_content += f"**👥 著者:** {authors}\n"
                     paper_content += f"**⭐ 関連性スコア:** {score}/10\n\n"
                     
-                    # 日本語の理由があればそれを使用、なければ英語版
+                    # 日本語と英語の両方を表示
                     if reason_ja:
-                        paper_content += f"**💡 なぜ重要か:**\n{reason_ja}\n\n"
-                    elif reason_en:
-                        paper_content += f"**💡 Why Important:**\n{reason_en}\n\n"
+                        paper_content += f"**💡 なぜ重要か（日本語）:**\n{reason_ja}\n\n"
+                    if reason_en:
+                        paper_content += f"**💡 Why Important (English):**\n{reason_en}\n\n"
                     
                     if summary_ja:
                         paper_content += f"**📄 要約（日本語）:**\n{summary_ja}\n\n"
