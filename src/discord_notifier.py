@@ -147,7 +147,9 @@ def send_to_discord(webhook_url, papers_html, topic, categories, threshold, pape
                 for idx, paper in enumerate(display_papers, 1):
                     title = paper.get('title', 'タイトル不明')
                     authors = paper.get('authors', '著者不明')
-                    link = paper.get('main_page', '')
+                    main_page = paper.get('main_page', '')
+                    # PDFリンクに変換 (https://arxiv.org/abs/xxxx -> https://arxiv.org/pdf/xxxx.pdf)
+                    link = main_page.replace('/abs/', '/pdf/') + '.pdf' if main_page else ''
                     score = paper.get('Relevancy score', 'N/A')
                     reason = paper.get('Reasons for match', '')
                     summary = paper.get('summary', {})
