@@ -52,7 +52,7 @@ def html_to_discord_markdown(html_text):
     return text
 
 
-def format_papers_for_discord(papers_html, topic, categories, threshold):
+def format_papers_for_discord(papers_html, topic, categories, threshold, paper_count=None):
     """
     論文情報をDiscord用にフォーマット
     """
@@ -66,7 +66,9 @@ def format_papers_for_discord(papers_html, topic, categories, threshold):
     if categories:
         header += f"カテゴリ: {', '.join(categories)}\n"
     header += f"関連性スコア閾値: {threshold}以上\n"
-    header += f"該当論文数: {len(papers_list)}件\n"
+    # paper_countが指定されていればそれを使用、なければpapers_listの長さ
+    count = paper_count if paper_count is not None else len(papers_list)
+    header += f"該当論文数: {count}件\n"
     header += "─" * 40 + "\n\n"
     
     return header, papers_list
@@ -92,7 +94,9 @@ def send_to_discord(webhook_url, papers_html, topic, categories, threshold, pape
         return False
     
     try:
-        header, papers_list = format_papers_for_discord(papers_html, topic, categories, threshold)
+        # 実際の論文数を計算（papers_with_summaryがある場合はそれを使用）
+        actual_paper_count = len(papers_with_summary) if papers_with_summary else None
+        header, papers_list = format_papers_for_discord(papers_html, topic, categories, threshold, paper_count=actual_paper_count)
         
         # ヘッダーを送信
         payload = {
@@ -147,9 +151,17 @@ def send_to_discord(webhook_url, papers_html, topic, categories, threshold, pape
                 for idx, paper in enumerate(display_papers, 1):
                     title = paper.get('title', 'タイトル不明')
                     authors = paper.get('authors', '著者不明')
-                    main_page = paper.get('main_page', '')
-                    # PDFリンクに変換 (https://arxiv.org/abs/xxxx -> https://arxiv.org/pdf/xxxx.pdf)
-                    link = main_page.replace('/abs/', '/pdf/') + '.pdf' if main_page else ''
+                    
+                    # リンクを取得（複数の可能性をチェック）
+                    main_page = paper.get('main_page') or paper.get('link') or paper.get('url') or ''
+                    
+                    # PDFリンクに変換
+                    if main_page and '/abs/' in main_page:
+                        link = main_page.replace('/abs/', '/pdf/') + '.pdf'
+                    elif main_page:
+                        link = main_page
+                    else:
+                        link = '（リンク情報なし）'
                     score = paper.get('Relevancy score', 'N/A')
                     reason = paper.get('Reasons for match', '')
                     summary = paper.get('summary', {})

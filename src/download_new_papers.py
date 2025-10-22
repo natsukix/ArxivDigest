@@ -26,7 +26,17 @@ def _download_new_papers(field_abbr):
     new_paper_list = []
     for i in tqdm.tqdm(range(len(dt_list))):
         paper = {}
-        paper_number = dt_list[i].text.strip().split(" ")[2].split(":")[-1]
+        
+        # arXiv IDの抽出方法を改善
+        # dt要素からarXivリンクを直接取得
+        arxiv_link = dt_list[i].find('a', {'title': 'Abstract'})
+        if arxiv_link and 'href' in arxiv_link.attrs:
+            paper_number = arxiv_link['href'].split('/')[-1]
+        else:
+            # フォールバック: テキストから抽出
+            dt_text = dt_list[i].text.strip()
+            paper_number = dt_text.split(" ")[2].split(":")[-1] if len(dt_text.split(" ")) > 2 else ""
+        
         paper['main_page'] = arxiv_base + paper_number
         paper['pdf'] = arxiv_base.replace('abs', 'pdf') + paper_number
 
