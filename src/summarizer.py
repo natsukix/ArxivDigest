@@ -1,16 +1,21 @@
 """
 論文要約生成機能
 """
-import openai
+import os
 import time
 import sys
 import io
+import json
 from typing import List, Dict
+from openai import OpenAI
 
 # Windows環境でのUnicode出力対応
 if sys.platform == 'win32':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
+# Initialize OpenAI client
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
 SUMMARY_PROMPT = """You are an AI research assistant. Your task is to read the following arXiv paper's title, authors, and abstract, then generate a comprehensive summary in both English and Japanese.
@@ -54,7 +59,7 @@ def generate_summary(paper: Dict, model_name: str = "gpt-3.5-turbo") -> str:
     )
     
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model=model_name,
             messages=[
                 {"role": "system", "content": "You are a helpful research assistant that summarizes academic papers in both English and Japanese."},
@@ -67,7 +72,6 @@ def generate_summary(paper: Dict, model_name: str = "gpt-3.5-turbo") -> str:
         content = response.choices[0].message.content.strip()
         
         # JSONパースを試みる
-        import json
         import re
         
         # JSON部分を抽出

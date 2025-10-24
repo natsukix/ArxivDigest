@@ -8,7 +8,7 @@ import requests
 from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor
 
-import openai
+from openai import OpenAI
 import discord
 from discord.ext import commands
 
@@ -34,6 +34,9 @@ MAX_TOKENS_PER_CHUNK = int(os.getenv("MAX_TOKENS_PER_CHUNK", "4000"))
 REACTION_EMOJI = os.getenv("REACTION_EMOJI", "🔍")  # リアクション対象の絵文字
 PDF_ANALYSIS_MODEL = os.getenv("PDF_ANALYSIS_MODEL", "gpt-4o-mini")  # .env から読み込む
 
+# Initialize OpenAI client
+client = OpenAI(api_key=OPENAI_API_KEY)
+
 # 環境変数の確認ログ
 print(f"\n=== BOT CONFIGURATION ===")
 print(f"DISCORD_BOT_TOKEN: {'SET' if DISCORD_BOT_TOKEN else 'NOT SET'}")
@@ -43,8 +46,6 @@ print(f"OPENAI_API_KEY: {'SET' if OPENAI_API_KEY else 'NOT SET'}")
 print(f"REACTION_EMOJI: '{REACTION_EMOJI}'")
 print(f"PDF_ANALYSIS_MODEL: {PDF_ANALYSIS_MODEL}")
 print(f"========================\n")
-
-openai.api_key = OPENAI_API_KEY
 
 intents = discord.Intents.all()  # すべてのIntentを有効化
 intents.reactions = True  # リアクションイベントを受け取るために必要
@@ -128,7 +129,7 @@ Paper text (first 100k chars):\n
 {text[:100000]}
 """
     
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model=PDF_ANALYSIS_MODEL,
         messages=[{"role": "user", "content": prompt}],
     )

@@ -8,18 +8,14 @@ import time
 import json
 from typing import Optional, Sequence, Union
 
-import openai
+from openai import OpenAI
 import tqdm
-from openai import openai_object
 import copy
 
-StrOrOpenAIObject = Union[str, openai_object.OpenAIObject]
+# Initialize OpenAI client
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-
-openai_org = os.getenv("OPENAI_ORG")
-if openai_org is not None:
-    openai.organization = openai_org
-    logging.warning(f"Switching to organization: {openai_org} for OAI API key.")
+StrOrOpenAIObject = Union[str, dict]
 
 
 @dataclasses.dataclass
@@ -105,7 +101,7 @@ def openai_completion(
                     model=model_name,
                     **batch_decoding_args.__dict__,
                     **decoding_kwargs,
-                    request_timeout=120,  # 2分のタイムアウトを追加
+                    timeout=120,  # 2分のタイムアウトを追加
                 )
                 
                 # gpt-5シリーズの場合の調整
@@ -119,7 +115,7 @@ def openai_completion(
                         shared_kwargs.pop("logit_bias", None)
                 
                 if is_chat_model:
-                    completion_batch = openai.ChatCompletion.create(
+                    completion_batch = client.chat.completions.create(
                         messages=[
                             {"role": "system", "content": "You are a helpful assistant."},
                             {"role": "user", "content": prompt_batch[0]}
@@ -127,16 +123,30 @@ def openai_completion(
                         **shared_kwargs
                     )
                 else:
-                    completion_batch = openai.Completion.create(prompt=prompt_batch, **shared_kwargs)
+                    # Legacy completion API is deprecated in OpenAI 1.x
+                    # Convert to chat completion format
+                    completion_batch = client.chat.completions.create(
+                        messages=[
+                            {"role": "system", "content": "You are a helpful assistant."},
+                            {"role": "user", "content": prompt_batch[0]}
+                        ],
+                        **shared_kwargs
+                    )
 
                 choices = completion_batch.choices
                 
+                # Convert to dict format for compatibility
+                completions_list = []
                 for choice in choices:
-                    choice["total_tokens"] = completion_batch.usage.total_tokens
-                completions.extend(choices)
+                    choice_dict = {
+                        "text": choice.message.content if hasattr(choice, 'message') else choice.text,
+                        "total_tokens": completion_batch.usage.total_tokens if hasattr(completion_batch, 'usage') else 0
+                    }
+                    completions_list.append(choice_dict)
+                completions.extend(completions_list)
                 break
-            except openai.error.OpenAIError as e:
-                logging.warning(f"OpenAIError: {e}.")
+            except Exception as e:
+                logging.warning(f"OpenAI API Error: {e}.")
                 if "Please reduce your prompt" in str(e):
                     batch_decoding_args.max_tokens = int(batch_decoding_args.max_tokens * 0.8)
                     logging.warning(f"Reducing target length to {batch_decoding_args.max_tokens}, Retrying...")
