@@ -110,7 +110,6 @@ def openai_completion(
                     model=model_name,
                     **batch_decoding_args.__dict__,
                     **decoding_kwargs,
-                    request_timeout=120,  # 2分のタイムアウトを追加
                 )
                 
                 # gpt-5シリーズの場合の調整
@@ -127,7 +126,7 @@ def openai_completion(
                 if is_chat_model:
                     # OpenAI 1.3.0では、openai.ChatCompletion.createは非推奨だが、互換性シムがある
                     # ただしhttpxのバージョン問題があるため、clientを直接使用
-                    client = OpenAI(api_key=openai.api_key)
+                    client = OpenAI(api_key=openai.api_key, timeout=120)
                     response = client.chat.completions.create(
                         messages=[
                             {"role": "system", "content": "You are a helpful assistant."},
@@ -141,7 +140,7 @@ def openai_completion(
                         'usage': response.usage
                     })()
                 else:
-                    client = OpenAI(api_key=openai.api_key)
+                    client = OpenAI(api_key=openai.api_key, timeout=120)
                     response = client.chat.completions.create(
                         messages=[
                             {"role": "system", "content": "You are a helpful assistant."},
