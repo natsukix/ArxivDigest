@@ -6,6 +6,7 @@ import logging
 import tempfile
 import requests
 from dotenv import load_dotenv
+from concurrent.futures import ThreadPoolExecutor
 
 import openai
 from openai import OpenAI
@@ -32,13 +33,26 @@ DISCORD_ARXIV_ANALYSIS_CHANNEL_ID = int(os.getenv("DISCORD_ARXIV_ANALYSIS_CHANNE
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 MAX_TOKENS_PER_CHUNK = int(os.getenv("MAX_TOKENS_PER_CHUNK", "4000"))
 REACTION_EMOJI = os.getenv("REACTION_EMOJI", "🔍")  # リアクション対象の絵文字
+PDF_ANALYSIS_MODEL = os.getenv("PDF_ANALYSIS_MODEL", "gpt-4o-mini")  # .env から読み込む
+
+# 環境変数の確認ログ
+print(f"\n=== BOT CONFIGURATION ===")
+print(f"DISCORD_BOT_TOKEN: {'SET' if DISCORD_BOT_TOKEN else 'NOT SET'}")
+print(f"DISCORD_FORUM_CHANNEL_ID: {DISCORD_FORUM_CHANNEL_ID}")
+print(f"DISCORD_ARXIV_ANALYSIS_CHANNEL_ID: {DISCORD_ARXIV_ANALYSIS_CHANNEL_ID}")
+print(f"OPENAI_API_KEY: {'SET' if OPENAI_API_KEY else 'NOT SET'}")
+print(f"REACTION_EMOJI: '{REACTION_EMOJI}'")
+print(f"PDF_ANALYSIS_MODEL: {PDF_ANALYSIS_MODEL}")
+print(f"========================\n")
 
 openai.api_key = OPENAI_API_KEY
 
-intents = discord.Intents.default()
-intents.message_content = True
+intents = discord.Intents.all()  # すべてのIntentを有効化
 intents.reactions = True  # リアクションイベントを受け取るために必要
 bot = commands.Bot(command_prefix="!", intents=intents)
+
+# ThreadPoolExecutor で OpenAI API を非同期実行
+executor = ThreadPoolExecutor(max_workers=2)
 
 ARXIV_PDF_RE = re.compile(r"(?:https?://)?(?:www\.)?arxiv\.org/(?:pdf|abs)/([0-9.]+v?\d*)")
 
@@ -58,68 +72,144 @@ async def extract_text_from_pdf_bytes(pdf_bytes: bytes) -> str:
     return "\n".join(texts)
 
 
-async def analyze_text_with_openai(text: str, paper_id: str) -> str:
+def split_discord_message(text: str, max_length: int = 2000) -> list:
+    """
+    Discordの文字制限（2000文字）に合わせてテキストを分割
+    """
+    if len(text) <= max_length:
+        return [text]
+    
+    chunks = []
+    current_chunk = ""
+    
+    for line in text.split('\n'):
+        if len(current_chunk) + len(line) + 1 > max_length:
+            if current_chunk:
+                chunks.append(current_chunk)
+            current_chunk = line
+        else:
+            if current_chunk:
+                current_chunk += '\n' + line
+            else:
+                current_chunk = line
+    
+    if current_chunk:
+        chunks.append(current_chunk)
+    
+    return chunks
+
+
+async def analyze_text_with_openai(text: str, paper_id: str) -> tuple:
+    """
+    分析結果を日本語と英語に分割して返す
+    Returns: (japanese_analysis, english_analysis)
+    """
     prompt = f"""
-You are a research assistant. Analyze the following arXiv paper (id: {paper_id}). Provide:
-- Short 1-2 sentence summary
-- Main contributions (bullet list)
+You are a research assistant. Analyze the following arXiv paper (id: {paper_id}).
+
+Provide analysis in BOTH Japanese and English in the following format:
+
+## 日本語での分析
+- 短い要約（1-2文）
+- 主な貢献（箇条書き）
+- コア技術的アプローチ（簡潔に）
+- 主要な実験結果
+- 制限事項と今後の展望
+
+## English Analysis
+- Short summary (1-2 sentences)
+- Main contributions (bullet points)
 - Core technical approach (concise)
 - Key experimental results
 - Limitations and potential next steps
-Reply in Markdown.
+
+Use Markdown format.
 
 Paper text (first 100k chars):\n
 {text[:100000]}
 """
-    # OpenAI 1.3.0互換
-    try:
-        # 古いAPI互換シムを試す
-        response = openai.ChatCompletion.create(
-            model="gpt-4o",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=1024,
-            temperature=0.1,
-        )
-        return response.choices[0].message.content
-    except (AttributeError, TypeError):
-        # フォールバック：OpenAI 1.3.0新API
-        client = OpenAI(api_key=OPENAI_API_KEY)
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=1024,
-            temperature=0.1,
-        )
-        return response.choices[0].message.content
+    
+    # OpenAI 1.3.0を使用
+    client = OpenAI(api_key=OPENAI_API_KEY)
+    response = client.chat.completions.create(
+        model=PDF_ANALYSIS_MODEL,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    
+    content = response.choices[0].message.content
+    
+    # レスポンスを日本語と英語に分割
+    # "## English Analysis" で分割
+    parts = content.split("## English Analysis")
+    japanese_analysis = parts[0].replace("## 日本語での分析", "").strip()
+    english_analysis = parts[1].strip() if len(parts) > 1 else ""
+    
+    return japanese_analysis, english_analysis
+
+
+def analyze_text_with_openai_sync(text: str, paper_id: str) -> tuple:
+    """同期版 (ThreadPoolExecutor で実行用)"""
+    return asyncio.run(analyze_text_with_openai(text, paper_id))
 
 
 @bot.event
 async def on_ready():
     LOGGER.info(f"Bot ready: {bot.user}")
+    LOGGER.info(f"Bot intents: {bot.intents}")
 
 
 @bot.event
-async def on_reaction_add(reaction: discord.Reaction, user: discord.User):
-    """リアクション追加時に、フォーラムチャンネルかつ指定の絵文字でのみ処理"""
+async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
+    """Raw リアクションイベント（フォーラム含む）"""
+    LOGGER.info(f"=== ON_RAW_REACTION_ADD CALLED ===")
+    LOGGER.info(f"Payload: user_id={payload.user_id}, channel_id={payload.channel_id}, message_id={payload.message_id}, emoji={payload.emoji}")
+    
     # ボット自身のリアクションは無視
-    if user.bot:
+    if payload.user_id == bot.user.id:
+        LOGGER.info("Ignoring bot reaction")
         return
-
-    LOGGER.info(f"Reaction added: {reaction.emoji} by {user} in channel {reaction.message.channel.id}")
-    LOGGER.info(f"Expected channel: {DISCORD_FORUM_CHANNEL_ID}, Expected emoji: {REACTION_EMOJI}")
-
-    # 対象のフォーラムチャンネルか確認
-    if reaction.message.channel.id != DISCORD_FORUM_CHANNEL_ID:
-        LOGGER.warning(f"Reaction in wrong channel: {reaction.message.channel.id}")
+    
+    # チャンネルまたはスレッドを取得
+    channel = bot.get_channel(payload.channel_id)
+    if channel is None:
+        try:
+            channel = await bot.fetch_channel(payload.channel_id)
+        except Exception as e:
+            LOGGER.error(f"Failed to fetch channel: {e}")
+            return
+    
+    # フォーラムチャンネルか、スレッド（親がフォーラム）か確認
+    is_forum_post = False
+    if hasattr(channel, 'parent_id') and channel.parent_id == DISCORD_FORUM_CHANNEL_ID:
+        # スレッド（フォーラム投稿）
+        is_forum_post = True
+        LOGGER.info(f"✅ Thread in forum: parent_id={channel.parent_id}")
+    elif payload.channel_id == DISCORD_FORUM_CHANNEL_ID:
+        # フォーラムチャンネル直下（ただし通常はこないはず）
+        is_forum_post = True
+        LOGGER.info(f"✅ Direct forum channel")
+    else:
+        LOGGER.warning(f"Not in target forum: channel_id={payload.channel_id}, parent_id={getattr(channel, 'parent_id', None)}")
         return
-
+    
     # 指定されたリアクション絵文字か確認
-    if str(reaction.emoji) != REACTION_EMOJI:
-        LOGGER.warning(f"Wrong emoji: {str(reaction.emoji)} != {REACTION_EMOJI}")
+    if str(payload.emoji) != REACTION_EMOJI:
+        LOGGER.warning(f"Wrong emoji: {str(payload.emoji)} != {REACTION_EMOJI}")
         return
-
-    message = reaction.message
-    LOGGER.info(f"Reaction detected on message from {message.author}: {message.content[:50]}")
+    
+    LOGGER.info(f"✅ All conditions matched! Processing reaction...")
+    
+    # メッセージを取得
+    try:
+        channel = bot.get_channel(payload.channel_id)
+        if channel is None:
+            channel = await bot.fetch_channel(payload.channel_id)
+        message = await channel.fetch_message(payload.message_id)
+    except Exception as e:
+        LOGGER.error(f"Failed to fetch message: {e}")
+        return
+    
+    LOGGER.info(f"Message content: {message.content[:100]}")
 
     # メッセージからarXivリンクを抽出
     m = ARXIV_PDF_RE.search(message.content)
@@ -138,8 +228,35 @@ async def on_reaction_add(reaction: discord.Reaction, user: discord.User):
         LOGGER.error(f"Failed to fetch analysis channel: {e}")
         return
 
-    # ステータスメッセージを投稿
-    status_msg = await analysis_channel.send(f"🔎 Downloading and analyzing arXiv:{arxiv_id} from {message.author}...")
+    # ステータスメッセージを投稿（フォーラムなので新しいスレッドを作成）
+    try:
+        # REST API を使用してスレッドを作成
+        url = f"https://discord.com/api/v10/channels/{DISCORD_ARXIV_ANALYSIS_CHANNEL_ID}/threads"
+        headers = {
+            "Authorization": f"Bot {DISCORD_BOT_TOKEN}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "name": f"Analysis: arXiv:{arxiv_id}",
+            "message": {
+                "content": f"🔎 Downloading and analyzing arXiv:{arxiv_id} from {message.author}..."
+            }
+        }
+        
+        response = requests.post(url, headers=headers, json=payload)
+        if response.status_code not in [200, 201]:
+            LOGGER.error(f"Failed to create thread: {response.status_code} - {response.text}")
+            return
+        
+        thread_data = response.json()
+        thread_id = thread_data.get('id')
+        thread = await bot.fetch_channel(thread_id)
+        LOGGER.info(f"✓ Thread created: ID={thread_id}")
+        
+    except Exception as e:
+        LOGGER.error(f"Failed to create thread: {e}")
+        return
 
     try:
         r = requests.get(pdf_url, timeout=30)
@@ -147,24 +264,54 @@ async def on_reaction_add(reaction: discord.Reaction, user: discord.User):
         pdf_bytes = r.content
 
         text = await extract_text_from_pdf_bytes(pdf_bytes)
-        summary = await analyze_text_with_openai(text, arxiv_id)
-
-        # 分析結果を投稿タイトルと本文で構成
-        title = f"Analysis: arXiv:{arxiv_id}"
         
-        # フォーラムに新しい投稿を作成
-        thread = await analysis_channel.create_thread(
-            name=title,
-            content=f"**Original message:** {message.jump_url}\n**Author:** {message.author}\n\n{summary}"
+        # OpenAI API を ThreadPoolExecutor で非同期実行
+        loop = asyncio.get_event_loop()
+        japanese_analysis, english_analysis = await loop.run_in_executor(
+            executor, 
+            lambda: analyze_text_with_openai_sync(text, arxiv_id)
         )
-        await status_msg.edit(content=f"✅ Analysis completed for arXiv:{arxiv_id}\nResult: {thread.jump_url}")
+
+        # メッセージ1: オリジナル投稿情報
+        original_info = f"""🔗 **Original Post Information**
+**arXiv ID:** {arxiv_id}
+**URL:** https://arxiv.org/abs/{arxiv_id}
+**Posted by:** {message.author}
+**Original message:** [Link]({message.jump_url})
+"""
+        await thread.send(original_info)
+        
+        # メッセージ2: 日本語の分析（長い場合は分割）
+        japanese_header = "📖 **日本語での分析**\n\n"
+        japanese_chunks = split_discord_message(japanese_analysis, max_length=1900)
+        for i, chunk in enumerate(japanese_chunks):
+            if i == 0:
+                msg = japanese_header + chunk
+            else:
+                msg = f"**(続き)**\n{chunk}"
+            await thread.send(msg)
+        
+        # メッセージ3: 英語の分析（長い場合は分割）
+        english_header = "📝 **English Analysis**\n\n"
+        english_chunks = split_discord_message(english_analysis, max_length=1900)
+        for i, chunk in enumerate(english_chunks):
+            if i == 0:
+                msg = english_header + chunk
+            else:
+                msg = f"**(Continued)**\n{chunk}"
+            await thread.send(msg)
+        
+        LOGGER.info(f"✅ Analysis completed and posted for arXiv:{arxiv_id}")
 
     except Exception as e:
         LOGGER.exception("Failed to analyze PDF")
         try:
-            await status_msg.edit(content=f"❌ Failed to analyze arXiv:{arxiv_id}: {str(e)[:100]}")
+            await thread.send(f"❌ Failed to analyze arXiv:{arxiv_id}: {str(e)[:200]}")
         except Exception:
             pass
+
+
+
 
 
 if __name__ == '__main__':
