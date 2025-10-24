@@ -8,14 +8,23 @@ import time
 import json
 from typing import Optional, Sequence, Union
 
-from openai import OpenAI
+import openai
 import tqdm
+from openai import OpenAI
 import copy
 
-# Initialize OpenAI client
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# OpenAI 1.3.0互換性のため、シムを作成
+try:
+    from openai import openai_object
+    StrOrOpenAIObject = Union[str, openai_object.OpenAIObject]
+except ImportError:
+    # OpenAI 1.3.0ではopenai_objectが存在しない
+    StrOrOpenAIObject = Union[str, dict]
 
-StrOrOpenAIObject = Union[str, dict]
+# OpenAI API キー設定（互換性維持）
+openai_org = os.getenv("OPENAI_ORG")
+if openai_org is not None:
+    logging.warning(f"Note: openai.organization is deprecated in OpenAI 1.3.0")
 
 
 @dataclasses.dataclass
@@ -101,7 +110,7 @@ def openai_completion(
                     model=model_name,
                     **batch_decoding_args.__dict__,
                     **decoding_kwargs,
-                    timeout=120,  # 2分のタイムアウトを追加
+                    request_timeout=120,  # 2分のタイムアウトを追加
                 )
                 
                 # gpt-5シリーズの場合の調整
@@ -114,40 +123,47 @@ def openai_completion(
                         shared_kwargs.pop("temperature", None)
                         shared_kwargs.pop("logit_bias", None)
                 
+                # OpenAI 1.3.0互換の処理
                 if is_chat_model:
-                    completion_batch = client.chat.completions.create(
+                    # OpenAI 1.3.0では、openai.ChatCompletion.createは非推奨だが、互換性シムがある
+                    # ただしhttpxのバージョン問題があるため、clientを直接使用
+                    client = OpenAI(api_key=openai.api_key)
+                    response = client.chat.completions.create(
                         messages=[
                             {"role": "system", "content": "You are a helpful assistant."},
                             {"role": "user", "content": prompt_batch[0]}
                         ],
                         **shared_kwargs
                     )
+                    # 互換性のため、response.choicesをlistに変換
+                    completion_batch = type('obj', (object,), {
+                        'choices': [type('obj', (object,), {'text': choice.message.content})() for choice in response.choices],
+                        'usage': response.usage
+                    })()
                 else:
-                    # Legacy completion API is deprecated in OpenAI 1.x
-                    # Convert to chat completion format
-                    completion_batch = client.chat.completions.create(
+                    client = OpenAI(api_key=openai.api_key)
+                    response = client.chat.completions.create(
                         messages=[
                             {"role": "system", "content": "You are a helpful assistant."},
                             {"role": "user", "content": prompt_batch[0]}
                         ],
                         **shared_kwargs
                     )
+                    completion_batch = type('obj', (object,), {
+                        'choices': [type('obj', (object,), {'text': choice.message.content})() for choice in response.choices],
+                        'usage': response.usage
+                    })()
 
                 choices = completion_batch.choices
                 
-                # Convert to dict format for compatibility
-                completions_list = []
                 for choice in choices:
-                    choice_dict = {
-                        "text": choice.message.content if hasattr(choice, 'message') else choice.text,
-                        "total_tokens": completion_batch.usage.total_tokens if hasattr(completion_batch, 'usage') else 0
-                    }
-                    completions_list.append(choice_dict)
-                completions.extend(completions_list)
+                    choice.total_tokens = completion_batch.usage.total_tokens
+                completions.extend(choices)
                 break
             except Exception as e:
-                logging.warning(f"OpenAI API Error: {e}.")
+                logging.warning(f"OpenAIError: {e}.")
                 if "Please reduce your prompt" in str(e):
+
                     batch_decoding_args.max_tokens = int(batch_decoding_args.max_tokens * 0.8)
                     logging.warning(f"Reducing target length to {batch_decoding_args.max_tokens}, Retrying...")
                 elif not backoff:
