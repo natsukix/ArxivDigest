@@ -8,6 +8,7 @@ import requests
 from dotenv import load_dotenv
 
 import openai
+from openai import OpenAI
 import discord
 from discord.ext import commands
 
@@ -70,14 +71,26 @@ Reply in Markdown.
 Paper text (first 100k chars):\n
 {text[:100000]}
 """
-    # Use OpenAI ChatCompletion (compat)
-    response = openai.ChatCompletion.create(
-        model="gpt-4o",
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=1024,
-        temperature=0.1,
-    )
-    return response.choices[0].message.content
+    # Use OpenAI ChatCompletion (OpenAI 1.3.0互換)
+    try:
+        # まず互換性シムを試す
+        response = openai.ChatCompletion.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=1024,
+            temperature=0.1,
+        )
+        return response.choices[0].message.content
+    except Exception:
+        # フォールバック：OpenAI 1.3.0直接使用
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=1024,
+            temperature=0.1,
+        )
+        return response.choices[0].message.content
 
 
 @bot.event
