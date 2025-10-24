@@ -161,7 +161,7 @@ async def on_ready():
     LOGGER.info(f"Guild messages intent: {bot.intents.guild_messages}")
     LOGGER.info(f"Reactions intent: {bot.intents.reactions}")
     LOGGER.info(f"Latency: {bot.latency}")
-    print(f"\n🤖 BOT IS READY!\n  User: {bot.user}\n  Intents: {bot.intents.value}\n  Deployed at: 2025-10-24 19:00 JST\n")
+    print(f"\n🤖 BOT IS READY!\n  User: {bot.user}\n  Intents: {bot.intents.value}\n  Deployed at: 2025-10-25 10:00 JST\n")
 
 
 @bot.event
