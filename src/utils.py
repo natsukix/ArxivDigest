@@ -135,8 +135,14 @@ def openai_completion(
                         **shared_kwargs
                     )
                     # 互換性のため、response.choicesをlistに変換
+                    # コンテンツ抽出用の新しい形式
                     completion_batch = type('obj', (object,), {
-                        'choices': [type('obj', (object,), {'text': choice.message.content})() for choice in response.choices],
+                        'choices': [type('obj', (object,), {
+                            'text': choice.message.content,
+                            'message': type('obj', (object,), {
+                                'content': choice.message.content
+                            })()
+                        })() for choice in response.choices],
                         'usage': response.usage
                     })()
                 else:
@@ -149,7 +155,12 @@ def openai_completion(
                         **shared_kwargs
                     )
                     completion_batch = type('obj', (object,), {
-                        'choices': [type('obj', (object,), {'text': choice.message.content})() for choice in response.choices],
+                        'choices': [type('obj', (object,), {
+                            'text': choice.message.content,
+                            'message': type('obj', (object,), {
+                                'content': choice.message.content
+                            })()
+                        })() for choice in response.choices],
                         'usage': response.usage
                     })()
 

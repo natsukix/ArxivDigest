@@ -181,8 +181,17 @@ def generate_relevance_score(
                 logit_bias={"100257": -100},  # prevent the <|endoftext|> from being generated
             )
             print("Response type:", type(response))
-            print("Response keys:", response.keys() if hasattr(response, 'keys') else "No keys")
-            print("response", response['message']['content'])
+            # OpenAI 1.3.0互換：attributeアクセスを試す
+            if hasattr(response, 'message'):
+                print("Response has 'message' attribute")
+                content = response.message.content
+            elif hasattr(response, 'text'):
+                print("Response has 'text' attribute")
+                content = response.text
+            else:
+                print("Response attributes:", dir(response))
+                raise ValueError(f"Cannot extract content from response type {type(response)}")
+            print("response content", content)
         except Exception as e:
             print(f"Error getting response: {e}")
             if response:
@@ -191,7 +200,9 @@ def generate_relevance_score(
         request_duration = time.time() - request_start
 
         process_start = time.time()
-        batch_data, hallu = post_process_chat_gpt_response(prompt_papers, response, threshold_score=threshold_score)
+        # レスポンスを辞書形式に変換（後方互換性のため）
+        response_dict = {'message': {'content': response.message.content if hasattr(response, 'message') else response.text}}
+        batch_data, hallu = post_process_chat_gpt_response(prompt_papers, response_dict, threshold_score=threshold_score)
         hallucination = hallucination or hallu
         ans_data.extend(batch_data)
 
