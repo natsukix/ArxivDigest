@@ -160,6 +160,8 @@ async def on_ready():
     LOGGER.info(f"Message content intent: {bot.intents.message_content}")
     LOGGER.info(f"Guild messages intent: {bot.intents.guild_messages}")
     LOGGER.info(f"Reactions intent: {bot.intents.reactions}")
+    LOGGER.info(f"Latency: {bot.latency}")
+    print(f"\n🤖 BOT IS READY!\n  User: {bot.user}\n  Intents: {bot.intents.value}\n")
 
 
 @bot.event
