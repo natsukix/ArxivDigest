@@ -71,9 +71,9 @@ Reply in Markdown.
 Paper text (first 100k chars):\n
 {text[:100000]}
 """
-    # Use OpenAI ChatCompletion (OpenAI 1.3.0互換)
+    # OpenAI 1.3.0互換
     try:
-        # まず互換性シムを試す
+        # 古いAPI互換シムを試す
         response = openai.ChatCompletion.create(
             model="gpt-4o",
             messages=[{"role": "user", "content": prompt}],
@@ -81,8 +81,8 @@ Paper text (first 100k chars):\n
             temperature=0.1,
         )
         return response.choices[0].message.content
-    except Exception:
-        # フォールバック：OpenAI 1.3.0直接使用
+    except (AttributeError, TypeError):
+        # フォールバック：OpenAI 1.3.0新API
         client = OpenAI(api_key=OPENAI_API_KEY)
         response = client.chat.completions.create(
             model="gpt-4o",
