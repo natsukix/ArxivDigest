@@ -10,21 +10,16 @@ from typing import Optional, Sequence, Union
 
 import openai
 import tqdm
-from openai import OpenAI
+from openai import openai_object
 import copy
 
-# OpenAI 1.3.0互換性のため、シムを作成
-try:
-    from openai import openai_object
-    StrOrOpenAIObject = Union[str, openai_object.OpenAIObject]
-except ImportError:
-    # OpenAI 1.3.0ではopenai_objectが存在しない
-    StrOrOpenAIObject = Union[str, dict]
+StrOrOpenAIObject = Union[str, openai_object.OpenAIObject]
 
-# OpenAI API キー設定（互換性維持）
+
 openai_org = os.getenv("OPENAI_ORG")
 if openai_org is not None:
-    logging.warning(f"Note: openai.organization is deprecated in OpenAI 1.3.0")
+    openai.organization = openai_org
+    logging.warning(f"Switching to organization: {openai_org} for OAI API key.")
 
 
 @dataclasses.dataclass
@@ -124,67 +119,25 @@ def openai_completion(
                         shared_kwargs.pop("logit_bias", None)
                 
                 if is_chat_model:
-                    # OpenAI 1.3.0互換の処理
-                    try:
-                        # 互換性シムを試す
-                        completion_batch = openai.ChatCompletion.create(
-                            messages=[
-                                {"role": "system", "content": "You are a helpful assistant."},
-                                {"role": "user", "content": prompt_batch[0]}
-                            ],
-                            **shared_kwargs
-                        )
-                    except TypeError as e:
-                        if "proxies" in str(e):
-                            # Fallback: use OpenAI client directly with environment variable
-                            api_key = os.getenv("OPENAI_API_KEY")
-                            client = OpenAI(api_key=api_key)
-                            response = client.chat.completions.create(
-                                messages=[
-                                    {"role": "system", "content": "You are a helpful assistant."},
-                                    {"role": "user", "content": prompt_batch[0]}
-                                ],
-                                **shared_kwargs
-                            )
-                            # 互換性のため、response.choicesをlistに変換
-                            completion_batch = type('obj', (object,), {
-                                'choices': [type('obj', (object,), {'text': choice.message.content})() for choice in response.choices],
-                                'usage': response.usage
-                            })()
-                        else:
-                            raise
+                    completion_batch = openai.ChatCompletion.create(
+                        messages=[
+                            {"role": "system", "content": "You are a helpful assistant."},
+                            {"role": "user", "content": prompt_batch[0]}
+                        ],
+                        **shared_kwargs
+                    )
                 else:
-                    try:
-                        completion_batch = openai.Completion.create(prompt=prompt_batch, **shared_kwargs)
-                    except TypeError as e:
-                        if "proxies" in str(e):
-                            # Fallback: use OpenAI client directly
-                            api_key = os.getenv("OPENAI_API_KEY")
-                            client = OpenAI(api_key=api_key)
-                            response = client.chat.completions.create(
-                                messages=[
-                                    {"role": "system", "content": "You are a helpful assistant."},
-                                    {"role": "user", "content": prompt_batch[0]}
-                                ],
-                                **shared_kwargs
-                            )
-                            completion_batch = type('obj', (object,), {
-                                'choices': [type('obj', (object,), {'text': choice.message.content})() for choice in response.choices],
-                                'usage': response.usage
-                            })()
-                        else:
-                            raise
+                    completion_batch = openai.Completion.create(prompt=prompt_batch, **shared_kwargs)
 
                 choices = completion_batch.choices
                 
                 for choice in choices:
-                    choice.total_tokens = completion_batch.usage.total_tokens
+                    choice["total_tokens"] = completion_batch.usage.total_tokens
                 completions.extend(choices)
                 break
-            except Exception as e:
+            except openai.error.OpenAIError as e:
                 logging.warning(f"OpenAIError: {e}.")
                 if "Please reduce your prompt" in str(e):
-
                     batch_decoding_args.max_tokens = int(batch_decoding_args.max_tokens * 0.8)
                     logging.warning(f"Reducing target length to {batch_decoding_args.max_tokens}, Retrying...")
                 elif not backoff:

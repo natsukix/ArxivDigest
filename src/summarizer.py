@@ -2,8 +2,6 @@
 論文要約生成機能
 """
 import openai
-from openai import OpenAI
-import os
 import time
 import sys
 import io
@@ -56,29 +54,15 @@ def generate_summary(paper: Dict, model_name: str = "gpt-3.5-turbo") -> str:
     )
     
     try:
-        # OpenAI 1.3.0互換処理
-        try:
-            response = openai.ChatCompletion.create(
-                model=model_name,
-                messages=[
-                    {"role": "system", "content": "You are a helpful research assistant that summarizes academic papers in both English and Japanese."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.3,
-                max_tokens=1200
-            )
-        except Exception:
-            # フォールバック：OpenAI 1.3.0直接使用
-            client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-            response = client.chat.completions.create(
-                model=model_name,
-                messages=[
-                    {"role": "system", "content": "You are a helpful research assistant that summarizes academic papers in both English and Japanese."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.3,
-                max_tokens=1200
-            )
+        response = openai.ChatCompletion.create(
+            model=model_name,
+            messages=[
+                {"role": "system", "content": "You are a helpful research assistant that summarizes academic papers in both English and Japanese."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=1200
+        )
         
         content = response.choices[0].message.content.strip()
         
