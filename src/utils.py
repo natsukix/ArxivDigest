@@ -123,36 +123,57 @@ def openai_completion(
                         shared_kwargs.pop("temperature", None)
                         shared_kwargs.pop("logit_bias", None)
                 
-                # OpenAI 1.3.0互換の処理
                 if is_chat_model:
-                    # OpenAI 1.3.0では、openai.ChatCompletion.createは非推奨だが、互換性シムがある
-                    # ただしhttpxのバージョン問題があるため、clientを直接使用
-                    client = OpenAI(api_key=openai.api_key)
-                    response = client.chat.completions.create(
-                        messages=[
-                            {"role": "system", "content": "You are a helpful assistant."},
-                            {"role": "user", "content": prompt_batch[0]}
-                        ],
-                        **shared_kwargs
-                    )
-                    # 互換性のため、response.choicesをlistに変換
-                    completion_batch = type('obj', (object,), {
-                        'choices': [type('obj', (object,), {'text': choice.message.content})() for choice in response.choices],
-                        'usage': response.usage
-                    })()
+                    # OpenAI 1.3.0互換の処理
+                    try:
+                        # 互換性シムを試す
+                        completion_batch = openai.ChatCompletion.create(
+                            messages=[
+                                {"role": "system", "content": "You are a helpful assistant."},
+                                {"role": "user", "content": prompt_batch[0]}
+                            ],
+                            **shared_kwargs
+                        )
+                    except TypeError as e:
+                        if "proxies" in str(e):
+                            # Fallback: use OpenAI client directly with environment variable
+                            api_key = os.getenv("OPENAI_API_KEY")
+                            client = OpenAI(api_key=api_key)
+                            response = client.chat.completions.create(
+                                messages=[
+                                    {"role": "system", "content": "You are a helpful assistant."},
+                                    {"role": "user", "content": prompt_batch[0]}
+                                ],
+                                **shared_kwargs
+                            )
+                            # 互換性のため、response.choicesをlistに変換
+                            completion_batch = type('obj', (object,), {
+                                'choices': [type('obj', (object,), {'text': choice.message.content})() for choice in response.choices],
+                                'usage': response.usage
+                            })()
+                        else:
+                            raise
                 else:
-                    client = OpenAI(api_key=openai.api_key)
-                    response = client.chat.completions.create(
-                        messages=[
-                            {"role": "system", "content": "You are a helpful assistant."},
-                            {"role": "user", "content": prompt_batch[0]}
-                        ],
-                        **shared_kwargs
-                    )
-                    completion_batch = type('obj', (object,), {
-                        'choices': [type('obj', (object,), {'text': choice.message.content})() for choice in response.choices],
-                        'usage': response.usage
-                    })()
+                    try:
+                        completion_batch = openai.Completion.create(prompt=prompt_batch, **shared_kwargs)
+                    except TypeError as e:
+                        if "proxies" in str(e):
+                            # Fallback: use OpenAI client directly
+                            api_key = os.getenv("OPENAI_API_KEY")
+                            client = OpenAI(api_key=api_key)
+                            response = client.chat.completions.create(
+                                messages=[
+                                    {"role": "system", "content": "You are a helpful assistant."},
+                                    {"role": "user", "content": prompt_batch[0]}
+                                ],
+                                **shared_kwargs
+                            )
+                            completion_batch = type('obj', (object,), {
+                                'choices': [type('obj', (object,), {'text': choice.message.content})() for choice in response.choices],
+                                'usage': response.usage
+                            })()
+                        else:
+                            raise
 
                 choices = completion_batch.choices
                 
