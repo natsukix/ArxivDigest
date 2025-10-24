@@ -156,6 +156,11 @@ def analyze_text_with_openai_sync(text: str, paper_id: str) -> tuple:
 async def on_ready():
     LOGGER.info(f"Bot ready: {bot.user}")
     LOGGER.info(f"Bot intents: {bot.intents}")
+    LOGGER.info(f"Intents value: {bot.intents.value}")
+    LOGGER.info(f"Message content intent: {bot.intents.message_content}")
+    LOGGER.info(f"Guild messages intent: {bot.intents.guild_messages}")
+    LOGGER.info(f"Reactions intent: {bot.intents.reactions}")
+    LOGGER.info(f"Raw reactions: {bot.intents.raw_reactions}")
 
 
 @bot.event
