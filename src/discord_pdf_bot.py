@@ -41,7 +41,7 @@ print(f"DISCORD_BOT_TOKEN: {'SET' if DISCORD_BOT_TOKEN else 'NOT SET'}")
 print(f"DISCORD_FORUM_CHANNEL_ID: {DISCORD_FORUM_CHANNEL_ID}")
 print(f"DISCORD_ARXIV_ANALYSIS_CHANNEL_ID: {DISCORD_ARXIV_ANALYSIS_CHANNEL_ID}")
 print(f"OPENAI_API_KEY: {'SET' if OPENAI_API_KEY else 'NOT SET'}")
-print(f"REACTION_EMOJI: '{REACTION_EMOJI}'")
+print(f"REACTION_EMOJI: {REACTION_EMOJI}")
 print(f"PDF_ANALYSIS_MODEL: {PDF_ANALYSIS_MODEL}")
 print(f"========================\n")
 
@@ -161,7 +161,7 @@ async def on_ready():
     LOGGER.info(f"Guild messages intent: {bot.intents.guild_messages}")
     LOGGER.info(f"Reactions intent: {bot.intents.reactions}")
     LOGGER.info(f"Latency: {bot.latency}")
-    print(f"\n🤖 BOT IS READY!\n  User: {bot.user}\n  Intents: {bot.intents.value}\n")
+    print(f"\n🤖 BOT IS READY!\n  User: {bot.user}\n  Intents: {bot.intents.value}\n  Deployed at: 2025-10-24 19:00 JST\n")
 
 
 @bot.event
