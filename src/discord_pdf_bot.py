@@ -165,8 +165,20 @@ async def on_ready():
 
 
 @bot.event
+async def on_disconnect():
+    """接続切断時のログ"""
+    LOGGER.warning("⚠️ Bot disconnected from Discord Gateway")
+
+
+@bot.event
+async def on_resumed():
+    """再接続時のログ"""
+    LOGGER.info("✅ Bot resumed connection to Discord Gateway")
+
+
+@bot.event
 async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
-    """Raw リアクションイベント（フォーラム含む）"""
+    """Raw リアクションイベント(フォーラム含む)"""
     LOGGER.info(f"=== ON_RAW_REACTION_ADD CALLED ===")
     LOGGER.info(f"Payload: user_id={payload.user_id}, channel_id={payload.channel_id}, message_id={payload.message_id}, emoji={payload.emoji}")
     
@@ -325,4 +337,5 @@ if __name__ == '__main__':
         print("DISCORD_BOT_TOKEN not set, exiting")
         raise SystemExit(1)
 
-    bot.run(DISCORD_BOT_TOKEN)
+    # reconnect=True で接続エラー時に自動再接続を試行
+    bot.run(DISCORD_BOT_TOKEN, reconnect=True)
