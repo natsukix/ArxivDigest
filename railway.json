@@ -5,5 +5,14 @@
   "deploy": {
     "startCommand": "python src/discord_pdf_bot.py",
     "restartPolicyType": "ON_FAILURE"
+  },
+  "variables": {
+    "DISCORD_BOT_TOKEN": "Your Discord bot token",
+    "DISCORD_FORUM_CHANNEL_ID": "Forum channel ID for picking up papers",
+    "DISCORD_ARXIV_ANALYSIS_CHANNEL_ID": "Forum channel ID for analysis results",
+    "OPENAI_API_KEY": "Your OpenAI API key",
+    "REACTION_EMOJI": "❤️",
+    "PDF_ANALYSIS_MODEL": "gpt-4o-mini"
   }
 }
+
