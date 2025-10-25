@@ -49,10 +49,20 @@ openai.api_key = OPENAI_API_KEY
 
 intents = discord.Intents.all()  # すべてのIntentを有効化
 intents.reactions = True  # リアクションイベントを受け取るために必要
-bot = commands.Bot(command_prefix="!", intents=intents)
+
+# heartbeat_timeout を延長して接続安定性を向上 (デフォルト60秒 → 120秒)
+bot = commands.Bot(
+    command_prefix="!",
+    intents=intents,
+    heartbeat_timeout=120.0  # heartbeat応答待機時間を延長
+)
 
 # ThreadPoolExecutor で OpenAI API を非同期実行
 executor = ThreadPoolExecutor(max_workers=2)
+
+# 切断カウンター (RESUME失敗対策)
+disconnect_count = 0
+MAX_DISCONNECTS = 10  # 10回切断したら完全再起動
 
 ARXIV_PDF_RE = re.compile(r"(?:https?://)?(?:www\.)?arxiv\.org/(?:pdf|abs)/([0-9.]+v?\d*)")
 
@@ -154,6 +164,8 @@ def analyze_text_with_openai_sync(text: str, paper_id: str) -> tuple:
 
 @bot.event
 async def on_ready():
+    global disconnect_count
+    disconnect_count = 0  # 完全再接続時はカウンターリセット
     LOGGER.info(f"Bot ready: {bot.user}")
     LOGGER.info(f"Bot intents: {bot.intents}")
     LOGGER.info(f"Intents value: {bot.intents.value}")
@@ -162,18 +174,40 @@ async def on_ready():
     LOGGER.info(f"Reactions intent: {bot.intents.reactions}")
     LOGGER.info(f"Latency: {bot.latency}")
     print(f"\n🤖 BOT IS READY!\n  User: {bot.user}\n  Intents: {bot.intents.value}\n  Deployed at: 2025-10-25 10:00 JST\n")
+    
+    # ヘルスチェックタスクを開始
+    if not health_check_task.is_running():
+        health_check_task.start()
+
+
+from discord.ext import tasks
+
+@tasks.loop(hours=1)
+async def health_check_task():
+    """1時間ごとにボットの状態をログ出力"""
+    LOGGER.info(f"💓 Health check: Bot is {'connected' if not bot.is_closed() else 'disconnected'}, latency={bot.latency:.2f}s, disconnect_count={disconnect_count}")
 
 
 @bot.event
 async def on_disconnect():
     """接続切断時のログ"""
-    LOGGER.warning("⚠️ Bot disconnected from Discord Gateway")
+    global disconnect_count
+    disconnect_count += 1
+    LOGGER.warning(f"⚠️ Bot disconnected from Discord Gateway (count: {disconnect_count}/{MAX_DISCONNECTS})")
+    
+    if disconnect_count >= MAX_DISCONNECTS:
+        LOGGER.error(f"🔴 Too many disconnects ({disconnect_count}), forcing complete restart...")
+        await bot.close()
+        import sys
+        sys.exit(1)  # Railway が自動的に再起動
 
 
 @bot.event
 async def on_resumed():
     """再接続時のログ"""
-    LOGGER.info("✅ Bot resumed connection to Discord Gateway")
+    global disconnect_count
+    LOGGER.info(f"✅ Bot resumed connection to Discord Gateway (disconnect_count: {disconnect_count})")
+    # RESUME成功時はカウンターをリセットしない (累積で監視)
 
 
 @bot.event
