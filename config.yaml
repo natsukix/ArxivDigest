@@ -41,18 +41,37 @@ summary_model: "gpt-4o-mini"
 # これは空でも構いません。その場合、判断やフィルタリングなしに、arXivが応答する順序で
 # 全ての論文リストを返します。
 interest: |
-  **Priority: Groundbreaking papers that achieve state-of-the-art (SotA) results in their respective categories**
+  **Priority: Papers achieving state-of-the-art (SotA) results with practical applicability**
   
-  I am particularly interested in:
-  1. Papers reporting new SotA performance on established benchmarks
-  2. Novel breakthrough methods that significantly advance the field
-  3. Large language model pretraining, finetuning, and prompting techniques with empirical improvements
-  4. Multimodal machine learning (vision-language models, audio-language models, etc.) showing superior results
-  5. Innovative neural network architectures and training methods that outperform existing approaches
-  6. Practical applications and real-world deployments of AI/ML systems with demonstrated impact
+  **High Priority Areas:**
+  1. **Large Language Models (LLMs)**
+     - Novel pretraining, finetuning, and prompting techniques with empirical improvements
+     - Efficient inference methods (quantization, pruning, distillation)
+     - Context window extension and long-context understanding
+     - Multimodal LLMs (vision-language, audio-language models)
+     - Real-world deployment optimizations and cost reduction techniques
   
-  Lower priority or not interested in:
-  - Papers focused on specific languages (e.g., Arabic, Chinese-specific NLP)
-  - Narrow application papers (e.g., medical diagnosis for specific diseases)
-  - Incremental improvements without significant novelty
-  - Papers without clear performance comparisons to baselines
+  2. **Video Understanding**
+     - Video-language models and video captioning with SotA results
+     - Temporal reasoning and action recognition breakthroughs
+     - Efficient video processing architectures
+     - Practical video analysis systems with demonstrated real-world impact
+  
+  3. **Speech Recognition & Audio Processing**
+     - End-to-end speech recognition with improved accuracy
+     - Multilingual and code-switching speech models
+     - Real-time speech processing and streaming ASR
+     - Audio-visual speech recognition and multimodal fusion
+     - Practical voice interface systems
+  
+  **General Criteria:**
+  - Clear performance comparisons with baselines on established benchmarks
+  - Reproducible results with code/model availability preferred
+  - Practical applicability and deployment feasibility
+  - Novel architectural innovations or training methodologies
+  
+  **Lower Priority:**
+  - Language-specific NLP (e.g., Arabic, Chinese-only papers) unless groundbreaking
+  - Narrow domain applications without broader impact
+  - Incremental improvements (<5% gain) without significant novelty
+  - Papers lacking quantitative evaluation or baseline comparisons
