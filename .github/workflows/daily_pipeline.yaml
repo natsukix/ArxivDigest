@@ -8,8 +8,8 @@ on:
   schedule:
     # * is a special character in YAML so you have to quote this string
     # Feel free to change this cron schedule
-    # Currently its scheduled for 1:25 pm UTC, Sun-Thurs
-    - cron:  '25 13 * * 0-4'
+    # Currently its scheduled for 1:25 pm UTC, Daily (Mon-Fri)
+    - cron:  '25 13 * * 1-5'
 
 jobs:
   generate_and_send_digest:
