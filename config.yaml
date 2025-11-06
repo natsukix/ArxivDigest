@@ -44,20 +44,28 @@ interest: |
   **Priority: Papers achieving state-of-the-art (SotA) results with practical applicability**
   
   **High Priority Areas:**
-  1. **Large Language Models (LLMs)**
+  1. **Anomaly Sound Detection & Sound Event Detection**
+     - Unsupervised and self-supervised anomaly detection methods
+     - Industrial sound monitoring and predictive maintenance applications
+     - Few-shot and zero-shot anomaly detection approaches
+     - Audio event detection and sound event classification (environmental sounds, acoustic scenes)
+     - Real-time detection systems with practical deployment
+     - Novel feature extraction and representation learning for audio analysis
+  
+  2. **Large Language Models (LLMs)**
      - Novel pretraining, finetuning, and prompting techniques with empirical improvements
      - Efficient inference methods (quantization, pruning, distillation)
      - Context window extension and long-context understanding
      - Multimodal LLMs (vision-language, audio-language models)
      - Real-world deployment optimizations and cost reduction techniques
   
-  2. **Video Understanding**
+  3. **Video Understanding**
      - Video-language models and video captioning with SotA results
      - Temporal reasoning and action recognition breakthroughs
      - Efficient video processing architectures
      - Practical video analysis systems with demonstrated real-world impact
   
-  3. **Speech Recognition & Audio Processing**
+  4. **Speech Recognition & Audio Processing**
      - End-to-end speech recognition with improved accuracy
      - Multilingual and code-switching speech models
      - Real-time speech processing and streaming ASR
