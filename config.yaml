@@ -73,6 +73,7 @@ interest: |
      - Practical voice interface systems
   
   **General Criteria:**
+  - **Prefer papers accepted at major conferences or journals (e.g., NeurIPS, ICML, ICLR, CVPR, ICASSP, IEEE/ACM journals)**
   - Clear performance comparisons with baselines on established benchmarks
   - Reproducible results with code/model availability preferred
   - Practical applicability and deployment feasibility
