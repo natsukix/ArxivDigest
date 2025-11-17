@@ -80,6 +80,7 @@ interest: |
   - Novel architectural innovations or training methodologies
   
   **Lower Priority:**
+  - Papers without peer review or conference/journal acceptance information
   - Language-specific NLP (e.g., Arabic, Chinese-only papers) unless groundbreaking
   - Narrow domain applications without broader impact
   - Incremental improvements (<5% gain) without significant novelty
